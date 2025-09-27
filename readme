@@ -1,0 +1,9 @@
+task_tracker/                  # Root project folder (your web server directory)
+├── config.php                 # Database connection and permissions
+├── index.php                  # Entry point (redirects to login/dashboard)
+├── login.php                  # Login form and processing
+├── logout.php                 # Logout handler
+├── dashboard.php              # Main dashboard for viewing/filtering tasks
+├── create_task.php            # Form to create new tasks
+├── update_task.php            # Form to update task status
+└── reassign_task.php   
