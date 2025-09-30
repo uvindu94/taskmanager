@@ -57,6 +57,7 @@ $current_assignee = $stmt->fetchColumn();
 <head>
     <title>Reassign Task</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="./assets/fav.png">
     <style>
         :root {
             --primary-color: #2563eb;

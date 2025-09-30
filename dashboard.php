@@ -87,6 +87,7 @@ if (isset($_GET['task_id'])) {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <!-- DataTables JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.21/js/jquery.dataTables.min.js"></script>
+    <link rel="icon" type="image/png" href="./assets/fav.png">
 
     <style>
         * {
@@ -812,6 +813,10 @@ if (isset($_GET['task_id'])) {
                     <a href="projects.php" class="btn btn-secondary">
                         <i class="fas fa-file-alt"></i>
                         Projects
+                    </a>
+                                        <a href="profile.php" class="btn btn-secondary">
+                        <i class="fas fa-user-alt"></i>
+                        Profile
                     </a>
                     <a href="logout.php" class="btn btn-secondary">
                         <i class="fas fa-sign-out-alt"></i>

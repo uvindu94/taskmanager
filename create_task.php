@@ -65,6 +65,7 @@ $users = $stmt->fetchAll();
     <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+    <link rel="icon" type="image/png" href="./assets/fav.png">
 
     <style>
         * {
@@ -576,7 +577,7 @@ $users = $stmt->fetchAll();
 
                 <div class="form-group">
                     <label class="form-label" for="assigned_to">
-                        Assign To ( You can assign for multiple tasks)<span class="required-indicator">*</span>
+                        Assign To<span class="required-indicator">*</span>
                     </label>
                     <select id="assigned_to" name="assigned_to[]" class="form-select" multiple="multiple" required>
                         <?php
