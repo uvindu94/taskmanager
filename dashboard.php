@@ -88,709 +88,10 @@ if (isset($_GET['task_id'])) {
     <!-- DataTables JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.21/js/jquery.dataTables.min.js"></script>
     <link rel="icon" type="image/png" href="./assets/fav.png">
+    <link rel="stylesheet" href="./assets/css/dashboard.css">
 
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #f8fafc;
-            color: #2d3748;
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        /* Header */
-        .header {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 30px;
-            border-radius: 16px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.2);
-        }
-
-        .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-
-        .header-left h1 {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .header-subtitle {
-            opacity: 0.9;
-            font-size: 16px;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-
-        .btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 10px;
-            font-weight: 600;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .btn-primary {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            backdrop-filter: blur(10px);
-        }
-
-        .btn-primary:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: translateY(-2px);
-        }
-
-        .btn-secondary {
-            background: white;
-            color: #667eea;
-        }
-
-        .btn-secondary:hover {
-            background: #f7fafc;
-            transform: translateY(-2px);
-        }
-
-        /* Statistics Cards */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: white;
-            padding: 25px;
-            border-radius: 16px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--accent-color, #667eea);
-        }
-
-        .stat-card.pending::before {
-            background: #f6ad55;
-        }
-
-        .stat-card.in-progress::before {
-            background: #4299e1;
-        }
-
-        .stat-card.completed::before {
-            background: #48bb78;
-        }
-
-        .stat-card.overdue::before {
-            background: #f56565;
-        }
-
-        .stat-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .stat-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 18px;
-        }
-
-        .stat-card.pending .stat-icon {
-            background: #f6ad55;
-        }
-
-        .stat-card.in-progress .stat-icon {
-            background: #4299e1;
-        }
-
-        .stat-card.completed .stat-icon {
-            background: #48bb78;
-        }
-
-        .stat-card.overdue .stat-icon {
-            background: #f56565;
-        }
-
-        .stat-number {
-            font-size: 32px;
-            font-weight: 700;
-            color: #2d3748;
-        }
-
-        .stat-label {
-            color: #718096;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 600;
-        }
-
-        /* Filters */
-        .filters-section {
-            background: white;
-            padding: 25px;
-            border-radius: 16px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-            margin-bottom: 30px;
-        }
-
-        .filters-title {
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 20px;
-            color: #2d3748;
-        }
-
-        .filters-form {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            align-items: end;
-        }
-
-        .filter-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #4a5568;
-            font-size: 14px;
-        }
-
-        .filter-input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
-            font-size: 14px;
-            background: #f7fafc;
-            transition: all 0.3s ease;
-        }
-
-        .filter-input:focus {
-            outline: none;
-            border-color: #667eea;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        /* Tasks Table */
-        .tasks-section {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-            overflow: hidden;
-        }
-
-        .tasks-header {
-            padding: 25px 30px;
-            border-bottom: 1px solid #e2e8f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .tasks-title {
-            font-size: 20px;
-            font-weight: 700;
-            color: #2d3748;
-        }
-
-        .tasks-count {
-            background: #667eea;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .table-container {
-            overflow-x: auto;
-            padding: 20px;
-        }
-
-        /* Custom DataTables Styling */
-        #tasksTable {
-            width: 100% !important;
-            border-collapse: collapse;
-            background: white;
-        }
-
-        #tasksTable thead th {
-            background: #f8fafc !important;
-            padding: 15px 20px !important;
-            text-align: left;
-            font-weight: 600;
-            color: #4a5568 !important;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid #e2e8f0 !important;
-            border-top: none !important;
-        }
-
-        #tasksTable tbody td {
-            padding: 20px !important;
-            border-bottom: 1px solid #f1f5f9 !important;
-            vertical-align: middle;
-            border-top: none !important;
-        }
-
-        #tasksTable tbody tr:hover {
-            background: #f8fafc !important;
-        }
-
-        /* DataTables Control Styling */
-        .dataTables_wrapper {
-            font-family: inherit;
-        }
-
-        .dataTables_length,
-        .dataTables_filter,
-        .dataTables_info,
-        .dataTables_paginate {
-            margin: 15px 0;
-        }
-
-        .dataTables_length label,
-        .dataTables_filter label {
-            font-weight: 600;
-            color: #4a5568;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .dataTables_length select,
-        .dataTables_filter input {
-            padding: 8px 12px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 14px;
-            background: #f7fafc;
-            transition: all 0.3s ease;
-            margin-left: 10px;
-        }
-
-        .dataTables_filter input {
-            width: 250px;
-        }
-
-        .dataTables_length select:focus,
-        .dataTables_filter input:focus {
-            outline: none;
-            border-color: #667eea;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .dataTables_paginate {
-            float: right;
-        }
-
-        .dataTables_paginate .paginate_button {
-            padding: 8px 12px;
-            margin: 0 2px;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            color: #4a5568 !important;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-
-        .dataTables_paginate .paginate_button:hover {
-            background: #667eea !important;
-            color: white !important;
-            border-color: #667eea;
-            transform: translateY(-1px);
-        }
-
-        .dataTables_paginate .paginate_button.current {
-            background: #667eea !important;
-            color: white !important;
-            border-color: #667eea;
-        }
-
-        .dataTables_paginate .paginate_button.disabled {
-            color: #a0aec0 !important;
-            cursor: not-allowed;
-        }
-
-        .dataTables_info {
-            color: #718096;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .dataTables_controls {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 20px;
-            padding: 0 20px;
-            border-bottom: 1px solid #e2e8f0;
-            background: #f8fafc;
-        }
-
-        /* Task Content Styling */
-        .task-title {
-            font-weight: 600;
-            color: #2d3748;
-            margin-bottom: 5px;
-        }
-
-        .task-description {
-            color: #718096;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-
-        .status-badge {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            white-space: nowrap;
-        }
-
-        .status-pending {
-            background: #fef5e7;
-            color: #d69e2e;
-            border: 1px solid #f6ad55;
-        }
-
-        .status-in_progress {
-            background: #e6fffa;
-            color: #319795;
-            border: 1px solid #4fd1c7;
-        }
-
-        .status-completed {
-            background: #f0fff4;
-            color: #38a169;
-            border: 1px solid #68d391;
-        }
-
-        .priority-badge {
-            padding: 4px 8px;
-            border-radius: 15px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-
-        .priority-high {
-            background: #fed7d7;
-            color: #c53030;
-        }
-
-        .priority-medium {
-            background: #faf089;
-            color: #d69e2e;
-        }
-
-        .priority-low {
-            background: #c6f6d5;
-            color: #38a169;
-        }
-
-        .task-actions {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .action-btn {
-            padding: 6px 12px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-size: 12px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            white-space: nowrap;
-        }
-
-        .action-btn-primary {
-            background: #667eea;
-            color: white;
-        }
-
-        .action-btn-secondary {
-            background: #e2e8f0;
-            color: #4a5568;
-        }
-
-        .action-btn:hover {
-            transform: translateY(-1px);
-            opacity: 0.9;
-        }
-
-        .due-date {
-            font-size: 14px;
-            color: #4a5568;
-            white-space: nowrap;
-        }
-
-        .due-date.overdue {
-            color: #e53e3e;
-            font-weight: 600;
-        }
-
-        .assignee-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .assignee-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 12px;
-            flex-shrink: 0;
-        }
-
-        .assignee-details {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .assignee-name {
-            font-weight: 600;
-            color: #2d3748;
-            font-size: 14px;
-        }
-
-        .assignee-role {
-            color: #718096;
-            font-size: 12px;
-            text-transform: capitalize;
-        }
-
-        .creator-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .creator-avatar {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #48bb78, #38a169);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 11px;
-            flex-shrink: 0;
-        }
-
-        .creator-name {
-            font-weight: 500;
-            color: #2d3748;
-            font-size: 13px;
-        }
-
-        /* History Modal */
-        .history-section {
-            background: #f8fafc;
-            padding: 20px;
-            margin: 0 -20px -20px;
-            border-top: 1px solid #e2e8f0;
-        }
-
-        .history-title {
-            font-weight: 600;
-            color: #2d3748;
-            margin-bottom: 15px;
-        }
-
-        .history-item {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            border-left: 4px solid #667eea;
-        }
-
-        .history-action {
-            color: #2d3748;
-            font-weight: 500;
-            margin-bottom: 5px;
-        }
-
-        .history-meta {
-            color: #718096;
-            font-size: 12px;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 1024px) {
-            .filters-form {
-                grid-template-columns: 1fr 1fr;
-            }
-
-            .dataTables_controls {
-                flex-direction: column;
-                gap: 15px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                padding: 15px;
-            }
-
-            .header,
-            .filters-section,
-            .tasks-section {
-                padding: 20px 15px;
-            }
-
-            .header-content {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .header-actions {
-                width: 100%;
-                justify-content: stretch;
-            }
-
-            .btn {
-                flex: 1;
-                justify-content: center;
-            }
-
-            .filters-form {
-                grid-template-columns: 1fr;
-                gap: 15px;
-            }
-
-            .table-container {
-                padding: 10px;
-            }
-
-            .dataTables_filter input {
-                width: 100%;
-            }
-
-            .task-actions {
-                flex-direction: column;
-                gap: 5px;
-            }
-        }
-
-        /* Loading States */
-        .loading {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 50px;
-            color: #718096;
-        }
-
-        .spinner {
-            width: 32px;
-            height: 32px;
-            border: 3px solid #e2e8f0;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 15px;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        /* Empty States */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #718096;
-        }
-
-        .empty-state i {
-            font-size: 64px;
-            color: #e2e8f0;
-            margin-bottom: 20px;
-        }
-
-        .empty-state h3 {
-            font-size: 18px;
-            color: #4a5568;
-            margin-bottom: 10px;
-        }
+    
     </style>
 </head>
 
@@ -878,6 +179,122 @@ if (isset($_GET['task_id'])) {
                 <div class="stat-label">Overdue</div>
             </div>
         </div>
+
+        <!-- best task handlers  -->
+         <?php
+// Fetch top task handlers of the week (last 7 days)
+$week_start = date('Y-m-d', strtotime('-7 days'));
+$week_end = date('Y-m-d');
+
+$top_handlers_query = "
+SELECT 
+    u.id,
+    u.full_name,
+    u.role,
+    u.email,
+    (COUNT(t.id) + COALESCE((
+        SELECT COUNT(*) 
+        FROM task_history th 
+        WHERE th.performed_by = u.id 
+        AND th.action like '%forwarded%' 
+        AND th.performed_at BETWEEN ? AND ?
+    ), 0)) as completed_tasks,
+    COUNT(DISTINCT DATE(t.updated_at)) as active_days,
+    AVG(DATEDIFF(t.updated_at, t.created_at)) as avg_completion_time
+FROM users u
+INNER JOIN tasks t ON t.assigned_to = u.id
+WHERE t.status = 'completed'
+AND t.updated_at BETWEEN ? AND ?
+GROUP BY u.id
+HAVING completed_tasks > 0
+ORDER BY completed_tasks DESC, avg_completion_time ASC
+LIMIT 5
+";
+
+$stmt = $pdo->prepare($top_handlers_query);
+$stmt->execute([$week_start, $week_end . ' 23:59:59',$week_start, $week_end . ' 23:59:59']);
+$top_handlers = $stmt->fetchAll();
+?>
+
+<!-- Top Task Handlers Widget -->
+<?php if (count($top_handlers) > 0): ?>
+<div class="top-handlers-section">
+    <div class="top-handlers-header">
+        <h3 class="top-handlers-title">
+            <i class="fas fa-trophy"></i>
+            Top Task Handlers Last 7 Days
+        </h3>
+        <span class="week-range"><?php echo date('M j', strtotime($week_start)) . ' - ' . date('M j, Y', strtotime($week_end)); ?></span>
+    </div>
+    
+    <div class="handlers-carousel-container">
+        <div class="handlers-carousel">
+            <?php 
+            $rank = 1;
+            foreach ($top_handlers as $handler): 
+                $completion_time = round($handler['avg_completion_time'], 1);
+            ?>
+                <div class="handler-card rank-<?php echo $rank; ?>">
+                    <div class="rank-badge">
+                        <?php if ($rank == 1): ?>
+                            <i class="fas fa-crown"></i>
+                        <?php else: ?>
+                            #<?php echo $rank; ?>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="handler-avatar-large">
+                        <?php echo strtoupper(substr($handler['full_name'], 0, 1)); ?>
+                    </div>
+                    
+                    <div class="handler-info">
+                        <div class="handler-name"><?php echo htmlspecialchars($handler['full_name']); ?></div>
+                        <div class="handler-role"><?php echo htmlspecialchars($handler['role']); ?></div>
+                    </div>
+                    
+                    <div class="handler-stats-mini">
+                        <div class="mini-stat">
+                            <div class="mini-stat-icon"><i class="fas fa-check-double"></i></div>
+                            <div class="mini-stat-value"><?php echo $handler['completed_tasks']; ?></div>
+                            <div class="mini-stat-label">Completed</div>
+                        </div>
+                        <div class="mini-stat">
+                            <div class="mini-stat-icon"><i class="fas fa-calendar-check"></i></div>
+                            <div class="mini-stat-value"><?php echo $handler['active_days']; ?></div>
+                            <div class="mini-stat-label">Active Days</div>
+                        </div>
+                        <div class="mini-stat">
+                            <div class="mini-stat-icon"><i class="fas fa-clock"></i></div>
+                            <div class="mini-stat-value"><?php echo $completion_time; ?>d</div>
+                            <div class="mini-stat-label">Avg Time</div>
+                        </div>
+                    </div>
+                    
+                    <?php if ($rank == 1): ?>
+                        <div class="top-performer-badge">
+                            <i class="fas fa-star"></i>
+                            Top Performer Last 7 Days
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php 
+                $rank++;
+            endforeach; 
+            ?>
+        </div>
+        
+        <button class="carousel-nav prev" onclick="scrollHandlers('prev')">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        <button class="carousel-nav next" onclick="scrollHandlers('next')">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+    </div>
+    
+    <div class="carousel-dots" id="carouselDots"></div>
+</div>
+<?php endif; ?>
+        <!-- best task handlers  -->
 
         <!-- Filters -->
         <div class="filters-section">
@@ -1216,6 +633,81 @@ if (isset($_GET['task_id'])) {
             }
         });
     </script>
+
+
+
+<script>
+    // Top Handlers Carousel
+let currentSlide = 0;
+const carousel = document.querySelector('.handlers-carousel');
+const cards = document.querySelectorAll('.handler-card');
+const dotsContainer = document.getElementById('carouselDots');
+
+// Create dots
+if (cards.length > 0) {
+    cards.forEach((_, index) => {
+        const dot = document.createElement('div');
+        dot.className = 'carousel-dot' + (index === 0 ? ' active' : '');
+        dot.onclick = () => goToSlide(index);
+        dotsContainer.appendChild(dot);
+    });
+}
+
+function scrollHandlers(direction) {
+    const cardWidth = cards[0].offsetWidth + 20; // card width + gap
+    
+    if (direction === 'next') {
+        currentSlide = (currentSlide + 1) % cards.length;
+    } else {
+        currentSlide = (currentSlide - 1 + cards.length) % cards.length;
+    }
+    
+    goToSlide(currentSlide);
+}
+
+function goToSlide(index) {
+    currentSlide = index;
+    const cardWidth = cards[0].offsetWidth + 20;
+    carousel.scrollLeft = cardWidth * index;
+    
+    // Update dots
+    document.querySelectorAll('.carousel-dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === index);
+    });
+}
+
+// Auto-scroll every 5 seconds
+let autoScrollInterval = setInterval(() => {
+    scrollHandlers('next');
+}, 5000);
+
+// Pause auto-scroll on hover
+if (carousel) {
+    carousel.addEventListener('mouseenter', () => {
+        clearInterval(autoScrollInterval);
+    });
+
+    carousel.addEventListener('mouseleave', () => {
+        autoScrollInterval = setInterval(() => {
+            scrollHandlers('next');
+        }, 5000);
+    });
+
+    // Update dots on manual scroll
+    carousel.addEventListener('scroll', () => {
+        const cardWidth = cards[0].offsetWidth + 20;
+        const scrollPosition = carousel.scrollLeft;
+        const newSlide = Math.round(scrollPosition / cardWidth);
+        
+        if (newSlide !== currentSlide) {
+            currentSlide = newSlide;
+            document.querySelectorAll('.carousel-dot').forEach((dot, i) => {
+                dot.classList.toggle('active', i === currentSlide);
+            });
+        }
+    });
+}
+</script>
 </body>
 
 </html>
