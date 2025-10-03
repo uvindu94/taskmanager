@@ -1005,6 +1005,10 @@ foreach ($all_projects as $project) {
                         <i class="fas fa-plus"></i>
                         New Project
                     </button>
+                                                 <a href="budget_cal.php" class="btn btn-secondary">
+                        <i class="fa-solid fa-calculator"></i>
+                        Budget Cal
+                    </a>
                     <a href="dashboard.php" class="btn btn-secondary">
                         <i class="fas fa-arrow-left"></i>
                         Dashboard
