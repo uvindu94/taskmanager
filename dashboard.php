@@ -14,7 +14,7 @@ $stmt = $pdo->prepare("SELECT t.*, u.full_name as assigned_name, v.full_name as 
                        FROM tasks t 
                        JOIN users u ON t.assigned_to = u.id 
                        JOIN users v ON t.created_by = v.id 
-                       WHERE t.assigned_to = ? AND t.status = 'pending'
+                       WHERE t.assigned_to = ? AND (t.status = 'pending' OR t.status = 'in_progress')
                        ORDER BY t.due_date ASC, t.created_at ASC");
 $stmt->execute([$user_id]);
 $my_pending_tasks = $stmt->fetchAll();
