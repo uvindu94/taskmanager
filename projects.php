@@ -125,6 +125,8 @@ foreach ($all_projects as $project) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Projects Management - Task Tracker Pro</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" rel="stylesheet">
     <link rel="icon" type="image/png" href="./assets/fav.png">
     <style>
         * {
@@ -261,7 +263,7 @@ foreach ($all_projects as $project) {
         /* My Projects Section */
         .section-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 25px;
             flex-wrap: wrap;
@@ -695,6 +697,7 @@ foreach ($all_projects as $project) {
             padding: 15px 25px;
             border-bottom: 1px solid #f1f5f9;
             transition: all 0.3s ease;
+            cursor: pointer;
         }
 
         .mini-project:hover {
@@ -724,6 +727,88 @@ foreach ($all_projects as $project) {
             background: linear-gradient(90deg, #667eea, #764ba2);
             border-radius: 6px;
             transition: width 0.8s ease;
+        }
+
+        /* Project Detail Modal */
+        .project-detail-modal .modal-content {
+            max-width: 800px;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 25px;
+        }
+
+        .detail-section {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .detail-section.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .detail-section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #4a5568;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .detail-section-content {
+            color: #2d3748;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        /* DataTable Styles */
+        .datatable-wrapper {
+            background: white;
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        table.dataTable {
+            border-collapse: collapse !important;
+            width: 100% !important;
+        }
+
+        table.dataTable thead th {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px;
+            font-weight: 600;
+            text-align: left;
+            border: none;
+        }
+
+        table.dataTable tbody td {
+            padding: 15px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        table.dataTable tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .dataTables_wrapper .dataTables_filter input {
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-left: 10px;
+        }
+
+        .dataTables_wrapper .dataTables_length select {
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin: 0 10px;
         }
 
         /* Modal Styles */
@@ -988,6 +1073,10 @@ foreach ($all_projects as $project) {
             .modal-body {
                 padding: 20px;
             }
+
+            .detail-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -1005,7 +1094,7 @@ foreach ($all_projects as $project) {
                         <i class="fas fa-plus"></i>
                         New Project
                     </button>
-                                                 <a href="budget_cal.php" class="btn btn-secondary">
+                    <a href="budget_cal.php" class="btn btn-secondary">
                         <i class="fa-solid fa-calculator"></i>
                         Budget Cal
                     </a>
@@ -1026,6 +1115,10 @@ foreach ($all_projects as $project) {
             <button class="tab-btn" onclick="switchTab('team-overview')">
                 <i class="fas fa-users"></i>
                 Team Overview
+            </button>
+            <button class="tab-btn" onclick="switchTab('all-projects')">
+                <i class="fas fa-table"></i>
+                Projects Information
             </button>
         </div>
 
@@ -1066,7 +1159,6 @@ foreach ($all_projects as $project) {
                                 </div>
                             </div>
 
-                            <!-- Status Label (only show for non-completed projects) -->
                             <?php 
                             $completion = (int)$project['completion'];
                             $status = $project['status'] ?? 'not_yet_start';
@@ -1200,11 +1292,10 @@ foreach ($all_projects as $project) {
 
                         <div class="user-projects">
                             <?php foreach ($user_data['projects'] as $project): ?>
-                                <div class="mini-project">
+                                <div class="mini-project" onclick='showProjectDetail(<?php echo htmlspecialchars(json_encode($project)); ?>)'>
                                     <div class="mini-project-title">
                                         <?php echo htmlspecialchars($project['project']); ?>
                                         
-                                        <!-- Mini status indicator -->
                                         <?php 
                                         $completion = (int)$project['completion'];
                                         $status = $project['status'] ?? 'not_yet_start';
@@ -1232,14 +1323,86 @@ foreach ($all_projects as $project) {
                 <?php endforeach; ?>
             </div>
         </div>
+
+        <!-- All Projects Information Tab -->
+        <div id="all-projects" class="tab-content">
+            <div class="section-header">
+                <h2 class="section-title">All Projects Information</h2>
+            </div>
+
+            <div class="datatable-wrapper">
+                <table id="projectsTable" class="display" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Project Name</th>
+                            <th>Developer</th>
+                            <th>Sales Officer</th>
+                            <th>Status</th>
+                            <th>Progress</th>
+                            <th>Due Date</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($all_projects as $project): ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($project['project']); ?></td>
+                                <td><?php echo htmlspecialchars($project['creator_name'] ?? 'Unassigned'); ?></td>
+                                <td><?php echo htmlspecialchars($project['sales_officer'] ?? '-'); ?></td>
+                                <td>
+                                    <?php 
+                                    $completion = (int)$project['completion'];
+                                    $status = $project['status'] ?? 'not_yet_start';
+                                    if ($completion >= 100): 
+                                    ?>
+                                        <span class="status-label status-completed" style="font-size: 10px; padding: 4px 8px;">
+                                            <i class="fas fa-check-circle status-icon"></i>
+                                            Completed
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="status-label status-<?php echo $status; ?>" style="font-size: 10px; padding: 4px 8px;">
+                                            <i class="fas fa-<?php 
+                                                echo $status === 'not_yet_start' ? 'hourglass-start' : 
+                                                    ($status === 'ongoing' ? 'spinner' : 'clock'); 
+                                            ?> status-icon"></i>
+                                            <?php 
+                                            echo $status === 'not_yet_start' ? 'Not Started' : 
+                                                ($status === 'ongoing' ? 'Ongoing' : 'Waiting'); 
+                                            ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <div style="flex: 1; height: 8px; background: #e2e8f0; border-radius: 10px; overflow: hidden;">
+                                            <div style="height: 100%; width: <?php echo $completion; ?>%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 10px;"></div>
+                                        </div>
+                                        <span style="font-weight: 600; color: #667eea; min-width: 45px;"><?php echo $completion; ?>%</span>
+                                    </div>
+                                </td>
+                                <td><?php echo $project['due_date'] ? date('M j, Y', strtotime($project['due_date'])) : '-'; ?></td>
+                                <td><?php echo date('M j, Y', strtotime($project['created_at'])); ?></td>
+                                <td>
+                                    <button class="action-btn" onclick='showProjectDetail(<?php echo htmlspecialchars(json_encode($project)); ?>)' 
+                                            style="width: auto; padding: 6px 12px; background: #e6f7ff; color: #0066cc;" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <!-- Project Modal -->
+    <!-- Project Edit Modal -->
     <div id="projectModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="modal-title" id="modalTitle">Create New Project</h3>
-                <button class="close-btn" onclick="closeModal()">
+                <button class="close-btn" onclick="closeModal('projectModal')">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -1339,7 +1502,7 @@ foreach ($all_projects as $project) {
                 </div>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn-modal btn-cancel" onclick="closeModal()">Cancel</button>
+                    <button type="button" class="btn-modal btn-cancel" onclick="closeModal('projectModal')">Cancel</button>
                     <button type="submit" class="btn-modal btn-save" id="saveBtn">
                         <i class="fas fa-save"></i>
                         Save Project
@@ -1349,24 +1512,175 @@ foreach ($all_projects as $project) {
         </div>
     </div>
 
+    <!-- Project Detail Modal -->
+    <div id="projectDetailModal" class="modal project-detail-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="detailModalTitle">Project Details</h3>
+                <button class="close-btn" onclick="closeModal('projectDetailModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="detail-grid">
+                    <div class="detail-section">
+                        <div class="detail-section-title"><i class="fas fa-user"></i> Project Owner</div>
+                        <div class="detail-section-content" id="detail-owner">-</div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="detail-section-title"><i class="fas fa-briefcase"></i> Sales Officer</div>
+                        <div class="detail-section-content" id="detail-sales">-</div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="detail-section-title"><i class="fas fa-info-circle"></i> Status</div>
+                        <div class="detail-section-content" id="detail-status">-</div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="detail-section-title"><i class="fas fa-chart-line"></i> Completion</div>
+                        <div class="detail-section-content">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="flex: 1; height: 12px; background: #e2e8f0; border-radius: 10px; overflow: hidden;">
+                                    <div id="detail-progress-bar" style="height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 10px; transition: width 0.8s ease;"></div>
+                                </div>
+                                <span id="detail-progress-text" style="font-weight: 700; color: #667eea; font-size: 20px;">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="detail-section-title"><i class="fas fa-calendar-plus"></i> Created Date</div>
+                        <div class="detail-section-content" id="detail-created">-</div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="detail-section-title"><i class="fas fa-calendar-alt"></i> Due Date</div>
+                        <div class="detail-section-content" id="detail-due">-</div>
+                    </div>
+
+                    <div class="detail-section full-width">
+                        <div class="detail-section-title"><i class="fas fa-address-book"></i> Project Contacts</div>
+                        <div class="detail-section-content" id="detail-contacts">-</div>
+                    </div>
+
+                    <div class="detail-section full-width">
+                        <div class="detail-section-title"><i class="fas fa-comment-alt"></i> Remarks</div>
+                        <div class="detail-section-content" id="detail-remarks">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-modal btn-cancel" onclick="closeModal('projectDetailModal')">
+                    <i class="fas fa-times"></i>
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
     <script>
+        // Initialize DataTable
+        $(document).ready(function() {
+            $('#projectsTable').DataTable({
+                dom: 'Bfrtip',
+                buttons: [
+                    {
+                        extend: 'excel',
+                        text: '<i class="fas fa-file-excel"></i> Export to Excel',
+                        className: 'btn btn-primary',
+                        exportOptions: {
+                            columns: [0, 1, 2, 3, 4, 5, 6]
+                        }
+                    },
+                    {
+                        extend: 'print',
+                        text: '<i class="fas fa-print"></i> Print',
+                        className: 'btn btn-primary'
+                    }
+                ],
+                order: [[6, 'desc']],
+                pageLength: 25,
+                language: {
+                    search: "Search projects:",
+                    lengthMenu: "Show _MENU_ projects per page",
+                    info: "Showing _START_ to _END_ of _TOTAL_ projects",
+                    infoEmpty: "No projects available",
+                    infoFiltered: "(filtered from _MAX_ total projects)"
+                }
+            });
+        });
+
         // Tab Switching
         function switchTab(tabName) {
-            // Hide all tab contents
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
             
-            // Remove active class from all tab buttons
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
             
-            // Show selected tab content
             document.getElementById(tabName).classList.add('active');
-            
-            // Add active class to clicked tab button
             event.target.classList.add('active');
+        }
+
+        // Show Project Detail Modal
+        function showProjectDetail(projectData) {
+            const modal = document.getElementById('projectDetailModal');
+            
+            document.getElementById('detailModalTitle').textContent = projectData.project;
+            document.getElementById('detail-owner').textContent = projectData.creator_name || 'Unassigned';
+            document.getElementById('detail-sales').textContent = projectData.sales_officer || 'Not assigned';
+            document.getElementById('detail-created').textContent = new Date(projectData.created_at).toLocaleDateString('en-US', { 
+                year: 'numeric', month: 'long', day: 'numeric' 
+            });
+            document.getElementById('detail-due').textContent = projectData.due_date ? 
+                new Date(projectData.due_date).toLocaleDateString('en-US', { 
+                    year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                }) : 'No due date set';
+            document.getElementById('detail-contacts').textContent = projectData.project_contacts || 'No contacts provided';
+            document.getElementById('detail-remarks').textContent = projectData.remarks || 'No remarks';
+            
+            // Status
+            const completion = parseInt(projectData.completion);
+            const status = projectData.status || 'not_yet_start';
+            let statusHTML = '';
+            
+            if (completion >= 100) {
+                statusHTML = '<span class="status-label status-completed"><i class="fas fa-check-circle status-icon"></i> Completed</span>';
+            } else {
+                const statusMap = {
+                    'not_yet_start': { icon: 'hourglass-start', text: 'Not Yet Started' },
+                    'ongoing': { icon: 'spinner', text: 'Ongoing' },
+                    'waiting_for_customer_info': { icon: 'clock', text: 'Waiting for Customer Info' }
+                };
+                const statusInfo = statusMap[status] || statusMap['not_yet_start'];
+                statusHTML = `<span class="status-label status-${status}"><i class="fas fa-${statusInfo.icon} status-icon"></i> ${statusInfo.text}</span>`;
+            }
+            document.getElementById('detail-status').innerHTML = statusHTML;
+            
+            // Progress
+            document.getElementById('detail-progress-bar').style.width = '0%';
+            document.getElementById('detail-progress-text').textContent = '0%';
+            
+            setTimeout(() => {
+                document.getElementById('detail-progress-bar').style.width = completion + '%';
+                document.getElementById('detail-progress-text').textContent = completion + '%';
+            }, 100);
+            
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
         }
 
         // Modal Functions
@@ -1376,7 +1690,6 @@ foreach ($all_projects as $project) {
             const title = document.getElementById('modalTitle');
             const saveBtn = document.getElementById('saveBtn');
             
-            // Reset form
             form.reset();
             
             if (action === 'create') {
@@ -1390,7 +1703,6 @@ foreach ($all_projects as $project) {
                 document.getElementById('formAction').value = 'update';
                 document.getElementById('projectId').value = projectData.id;
                 
-                // Fill form with project data
                 document.getElementById('project').value = projectData.project || '';
                 document.getElementById('sales_officer').value = projectData.sales_officer || '';
                 document.getElementById('project_contacts').value = projectData.project_contacts || '';
@@ -1398,7 +1710,6 @@ foreach ($all_projects as $project) {
                 document.getElementById('completion').value = projectData.completion || 0;
                 document.getElementById('completionValue').textContent = projectData.completion || 0;
                 
-                // Set status
                 const statusValue = projectData.status || 'not_yet_start';
                 const statusRadio = document.querySelector(`input[name="status"][value="${statusValue}"]`);
                 if (statusRadio) {
@@ -1406,7 +1717,6 @@ foreach ($all_projects as $project) {
                 }
                 
                 if (projectData.due_date) {
-                    // Convert PHP datetime to HTML datetime-local format
                     const date = new Date(projectData.due_date);
                     const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
                     document.getElementById('due_date').value = localDate.toISOString().slice(0, 16);
@@ -1418,14 +1728,13 @@ foreach ($all_projects as $project) {
             modal.classList.add('show');
             document.body.style.overflow = 'hidden';
             
-            // Focus on first input
             setTimeout(() => {
                 document.getElementById('project').focus();
             }, 300);
         }
 
-        function closeModal() {
-            const modal = document.getElementById('projectModal');
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
             modal.classList.remove('show');
             document.body.style.overflow = 'auto';
         }
@@ -1451,7 +1760,6 @@ foreach ($all_projects as $project) {
             }
         }
 
-        // Auto-hide status labels for completed projects
         function updateStatusVisibility() {
             const completionSlider = document.getElementById('completion');
             const statusSection = document.querySelector('.status-options').parentElement;
@@ -1459,7 +1767,6 @@ foreach ($all_projects as $project) {
             if (parseInt(completionSlider.value) >= 100) {
                 statusSection.style.opacity = '0.5';
                 statusSection.style.pointerEvents = 'none';
-                // Add a note
                 let completedNote = statusSection.querySelector('.completed-note');
                 if (!completedNote) {
                     completedNote = document.createElement('div');
@@ -1482,7 +1789,6 @@ foreach ($all_projects as $project) {
         document.getElementById('completion').addEventListener('input', function() {
             document.getElementById('completionValue').textContent = this.value;
             
-            // Update slider color based on progress
             const progress = parseInt(this.value);
             let color = '#667eea';
             if (progress >= 100) color = '#48bb78';
@@ -1492,7 +1798,6 @@ foreach ($all_projects as $project) {
             
             this.style.background = `linear-gradient(to right, ${color} 0%, ${color} ${progress}%, #e2e8f0 ${progress}%, #e2e8f0 100%)`;
             
-            // Update status visibility based on completion
             updateStatusVisibility();
         });
 
@@ -1510,14 +1815,21 @@ foreach ($all_projects as $project) {
         // Close modal on escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
-                closeModal();
+                closeModal('projectModal');
+                closeModal('projectDetailModal');
             }
         });
 
         // Close modal on backdrop click
         document.getElementById('projectModal').addEventListener('click', function(e) {
             if (e.target === this) {
-                closeModal();
+                closeModal('projectModal');
+            }
+        });
+
+        document.getElementById('projectDetailModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal('projectDetailModal');
             }
         });
 
@@ -1539,7 +1851,6 @@ foreach ($all_projects as $project) {
             
             setTimeout(() => {
                 alert.remove();
-                // Clean URL
                 const url = new URL(window.location);
                 url.searchParams.delete('success');
                 url.searchParams.delete('error');
@@ -1557,7 +1868,6 @@ foreach ($all_projects as $project) {
 
         // Initialize progress animations on page load
         document.addEventListener('DOMContentLoaded', function() {
-            // Animate progress bars
             document.querySelectorAll('.progress-fill, .mini-progress-fill').forEach(bar => {
                 const width = bar.style.width;
                 bar.style.width = '0%';
@@ -1566,7 +1876,6 @@ foreach ($all_projects as $project) {
                 }, 500);
             });
             
-            // Initialize completion slider and status visibility
             const completionSlider = document.getElementById('completion');
             if (completionSlider) {
                 completionSlider.dispatchEvent(new Event('input'));
@@ -1574,27 +1883,8 @@ foreach ($all_projects as $project) {
             }
         });
 
-        // Search functionality (bonus feature)
-        function searchProjects(query) {
-            const cards = document.querySelectorAll('.project-card');
-            const lowercaseQuery = query.toLowerCase();
-            
-            cards.forEach(card => {
-                const title = card.querySelector('.project-title').textContent.toLowerCase();
-                const salesOfficer = card.querySelector('.field-value') ? 
-                    card.querySelector('.field-value').textContent.toLowerCase() : '';
-                
-                if (title.includes(lowercaseQuery) || salesOfficer.includes(lowercaseQuery)) {
-                    card.style.display = 'block';
-                } else {
-                    card.style.display = 'none';
-                }
-            });
-        }
-
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
-            // Ctrl/Cmd + N to create new project
             if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
                 e.preventDefault();
                 openModal('create');

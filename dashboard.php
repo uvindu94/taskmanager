@@ -907,12 +907,12 @@ $top_handlers = $stmt->fetchAll();
             const urlParams = new URLSearchParams(window.location.search);
             
             if (status) {
-                urlParams.set('quick', status);
+                urlParams.set('quick', status+"#tasksTable");
             } else {
                 urlParams.delete('quick');
             }
             
-            window.location.href = '?' + urlParams.toString();
+            window.location.href = '?' + urlParams.toString() + '#tasksTable';
         }
 
         $(document).ready(function() {
