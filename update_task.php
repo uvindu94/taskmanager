@@ -171,6 +171,195 @@ $remarks = $stmt->fetchAll();
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="icon" type="image/png" href="./assets/fav.png">
     <link rel="stylesheet" href="./assets/css/update_task.css">
+    <style>
+        /* Conversation View Styles */
+        .conversation-section {
+            background: #fff;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 30px;
+        }
+
+        .conversation-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a202c;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .conversation-thread {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .conversation-message {
+            display: flex;
+            gap: 16px;
+            animation: fadeInUp 0.3s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .message-content {
+            flex: 1;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .message-author {
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 15px;
+        }
+
+        .message-time {
+            font-size: 13px;
+            color: #a0aec0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .message-badge {
+            background: #edf2f7;
+            color: #4a5568;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .message-badge.initial {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
+        .message-badge.remark {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .message-body {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px 18px;
+            line-height: 1.6;
+            color: #2d3748;
+            font-size: 14.5px;
+        }
+
+        .message-body.initial-description {
+            background: linear-gradient(135deg, #ebf4ff 0%, #e0f2fe 100%);
+            border-color: #bfdbfe;
+            font-weight: 500;
+        }
+
+        .message-body.highlighted {
+            background: linear-gradient(135deg, #d9f99d 0%, #a7f3d0 100%);
+            border-color: #86efac;
+            box-shadow: 0 2px 12px rgba(34, 197, 94, 0.15);
+            animation: highlightPulse 1s ease-out;
+        }
+
+        @keyframes highlightPulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+            }
+            100% {
+                box-shadow: 0 2px 12px rgba(34, 197, 94, 0.15);
+            }
+        }
+
+        .conversation-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #a0aec0;
+        }
+
+        .conversation-empty i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .conversation-divider {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 30px 0;
+            color: #cbd5e0;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .conversation-divider::before,
+        .conversation-divider::after {
+            content: '';
+            flex: 1;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+        }
+
+        /* Highlight recent remarks (within last 24 hours) */
+        .message-body.recent {
+            position: relative;
+        }
+
+        .message-body.recent::before {
+            content: 'NEW';
+            position: absolute;
+            top: -10px;
+            right: 16px;
+            background: #22c55e;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+        }
+    </style>
 </head>
 
 <body>
@@ -192,11 +381,83 @@ $remarks = $stmt->fetchAll();
         <div class="task-details">
             <h2 class="task-title"><?php echo htmlspecialchars($task['title']); ?></h2>
 
-            <?php if (!empty($task['description'])): ?>
-                <div class="task-description">
-                    <?php echo nl2br(htmlspecialchars($task['description'])); ?>
+                    <!-- Conversation View Section -->
+        <div class="conversation-section">
+            <h3 class="conversation-title">
+                <i class="fas fa-comments"></i>
+                Task Conversation
+            </h3>
+
+            <?php if (empty($task['description']) && empty($remarks)): ?>
+                <div class="conversation-empty">
+                    <i class="fas fa-comment-slash"></i>
+                    <p>No conversation history available yet.</p>
+                </div>
+            <?php else: ?>
+                <div class="conversation-thread">
+                    <!-- Initial Task Description -->
+                    <?php if (!empty($task['description'])): ?>
+                        <div class="conversation-message">
+                            <div class="message-avatar">
+                                <?php echo strtoupper(substr($creator_name, 0, 1)); ?>
+                            </div>
+                            <div class="message-content">
+                                <div class="message-header">
+                                    <span class="message-author"><?php echo htmlspecialchars($creator_name); ?></span>
+                                    <span class="message-badge initial">
+                                        <i class="fas fa-flag"></i> Initial Task
+                                    </span>
+                                    <span class="message-time">
+                                        <i class="far fa-clock"></i>
+                                        <?php echo date('M j, Y g:i A', strtotime($task['created_at'])); ?>
+                                    </span>
+                                </div>
+                                <div class="message-body initial-description">
+                                    <?php echo nl2br(htmlspecialchars($task['description'])); ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($remarks)): ?>
+                        <div class="conversation-divider">
+                            <i class="fas fa-comments"></i> Updates & Remarks
+                        </div>
+
+                        <?php 
+                        // Sort remarks by created_at ascending for conversation flow
+                        usort($remarks, function($a, $b) {
+                            return strtotime($a['created_at']) - strtotime($b['created_at']);
+                        });
+                        
+                        foreach ($remarks as $remark): 
+                            $isRecent = (time() - strtotime($remark['created_at'])) < 86400; // 24 hours
+                        ?>
+                            <div class="conversation-message">
+                                <div class="message-avatar">
+                                    <?php echo strtoupper(substr($remark['full_name'], 0, 1)); ?>
+                                </div>
+                                <div class="message-content">
+                                    <div class="message-header">
+                                        <span class="message-author"><?php echo htmlspecialchars($remark['full_name']); ?></span>
+                                        <span class="message-badge remark">
+                                            <i class="fas fa-comment-dots"></i> Remark
+                                        </span>
+                                        <span class="message-time">
+                                            <i class="far fa-clock"></i>
+                                            <?php echo date('M j, Y g:i A', strtotime($remark['created_at'])); ?>
+                                        </span>
+                                    </div>
+                                    <div class="message-body highlighted <?php echo $isRecent ? 'recent' : ''; ?>">
+                                        <?php echo nl2br(htmlspecialchars($remark['remark'])); ?>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
+        </div>
 
             <!-- Progress Indicator -->
             <div class="progress-indicator">
@@ -259,6 +520,8 @@ $remarks = $stmt->fetchAll();
                 </div>
             </div>
         </div>
+
+
 
         <!-- Update Form -->
         <div class="form-section">
@@ -395,66 +658,17 @@ $remarks = $stmt->fetchAll();
         <div class="history-section">
             <h3 class="history-title">
                 <i class="fas fa-history"></i>
-                Task History & Remarks
+                Task History
             </h3>
 
-            <?php if (empty($history) && empty($remarks)): ?>
+            <?php if (empty($history)): ?>
                 <div class="history-empty">
                     <i class="fas fa-clipboard-list"></i>
                     <p>No history available for this task yet.</p>
                 </div>
             <?php else: ?>
                 <div class="history-timeline">
-                    <?php 
-                    // Combine history and remarks, then sort by date
-                    $combined = [];
-                    
-                    foreach ($remarks as $remark) {
-                        $combined[] = [
-                            'type' => 'remark',
-                            'data' => $remark,
-                            'timestamp' => strtotime($remark['created_at'])
-                        ];
-                    }
-                    
-                    foreach ($history as $item) {
-                        $combined[] = [
-                            'type' => 'history',
-                            'data' => $item,
-                            'timestamp' => strtotime($item['performed_at'])
-                        ];
-                    }
-                    
-                    // Sort by timestamp descending
-                    usort($combined, function($a, $b) {
-                        return $b['timestamp'] - $a['timestamp'];
-                    });
-                    
-                    foreach ($combined as $entry):
-                        if ($entry['type'] === 'remark'):
-                            $remark = $entry['data'];
-                    ?>
-                        <div class="history-item" style="border-left-color: #48bb78;">
-                            <div class="history-action">
-                                <i class="fas fa-comment" style="color: #48bb78;"></i> 
-                                <?php echo nl2br(htmlspecialchars($remark['remark'])); ?>
-                            </div>
-                            <div class="history-meta">
-                                <div class="history-performer">
-                                    <div class="history-avatar">
-                                        <?php echo strtoupper(substr($remark['full_name'], 0, 1)); ?>
-                                    </div>
-                                    <?php echo htmlspecialchars($remark['full_name']); ?>
-                                </div>
-                                <div class="history-time">
-                                    <i class="far fa-clock"></i>
-                                    <?php echo date('M j, Y g:i A', strtotime($remark['created_at'])); ?>
-                                </div>
-                            </div>
-                        </div>
-                    <?php else:
-                            $item = $entry['data'];
-                    ?>
+                    <?php foreach ($history as $item): ?>
                         <div class="history-item">
                             <div class="history-action"><?php echo htmlspecialchars($item['action']); ?></div>
                             <div class="history-meta">
@@ -470,10 +684,7 @@ $remarks = $stmt->fetchAll();
                                 </div>
                             </div>
                         </div>
-                    <?php 
-                        endif;
-                    endforeach; 
-                    ?>
+                    <?php endforeach; ?>
                 </div>
             <?php endif; ?>
         </div>
