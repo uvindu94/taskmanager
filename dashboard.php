@@ -461,6 +461,10 @@ $top_handlers = $stmt->fetchAll();
                     <p class="header-subtitle">Welcome back, <?php echo htmlspecialchars($_SESSION['username']); ?> (<?php echo ucfirst($role); ?>)</p>
                 </div>
                 <div class="header-actions">
+                                            <a href="financeinfo.php" class="btn btn-primary">
+                            <i class="fas fa-money-bill-wave"></i>
+                            Int. Finance
+                        </a>
                     <?php if (in_array('create', $rolePermissions[$role] ?? [])): ?>
                         <a href="create_task.php" class="btn btn-primary">
                             <i class="fas fa-plus"></i>
