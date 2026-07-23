@@ -7,6 +7,25 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 require_once 'config.php';
+
+// Fetch Division Features
+$user_features = [];
+if (isset($_SESSION['user_id'])) {
+    $current_div_id = get_user_division();
+    if (is_super_admin()) {
+        $stmt = $pdo->query("SELECT DISTINCT feature_key FROM division_features");
+        $user_features = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } else {
+        $stmt = $pdo->prepare("SELECT feature_key, access_level FROM division_features WHERE division_id = ?");
+        $stmt->execute([$current_div_id]);
+        $features = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($features as $f) {
+            if ($f['access_level'] === 'all' || ($f['access_level'] === 'division_heads_only' && is_division_head())) {
+                $user_features[] = $f['feature_key'];
+            }
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -117,6 +136,16 @@ require_once 'config.php';
                 <span class="font-medium">Projects</span>
             </a>
             
+            <?php if (!empty($user_features)): ?>
+                <div class="mt-6 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider px-3">Tools</div>
+                <?php if (in_array('budget_calculator', $user_features)): ?>
+                <a href="budget_cal.php" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 text-slate-600 hover:text-brand-600 transition-colors">
+                    <i class="fas fa-calculator w-5 text-center"></i>
+                    <span class="font-medium">Budget Calculator</span>
+                </a>
+                <?php endif; ?>
+            <?php endif; ?>
+            
             <?php if (is_super_admin() || is_division_head()): ?>
                 <div class="mt-6 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider px-3">Administration</div>
                 <a href="manage_users.php" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 text-slate-600 hover:text-brand-600 transition-colors">
@@ -132,6 +161,10 @@ require_once 'config.php';
                     <a href="manage_designations.php" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 text-slate-600 hover:text-brand-600 transition-colors">
                         <i class="fas fa-id-badge w-5 text-center"></i>
                         <span class="font-medium">Designations</span>
+                    </a>
+                    <a href="feature_toggles.php" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 text-slate-600 hover:text-brand-600 transition-colors">
+                        <i class="fas fa-toggle-on w-5 text-center"></i>
+                        <span class="font-medium">Feature Toggles</span>
                     </a>
                 <?php endif; ?>
             <?php endif; ?>
