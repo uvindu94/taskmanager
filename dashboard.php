@@ -127,7 +127,7 @@ $stmt = $pdo->prepare("SELECT u.id, u.full_name,
                         (SELECT COUNT(*) FROM projects WHERE created_by = u.id) as total_projects,
                         (SELECT AVG(completion) FROM projects WHERE created_by = u.id) as avg_project_completion
                        FROM users u 
-                       WHERE u.division_id = ?
+                       WHERE u.division_id = ? AND u.is_active = 1
                        ");
 $stmt->execute([$division_id]);
 $users_data = $stmt->fetchAll(PDO::FETCH_ASSOC);

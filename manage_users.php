@@ -10,6 +10,7 @@ if (!is_super_admin() && !is_division_head()) {
 $message = '';
 $error = '';
 $current_division_id = get_user_division();
+$is_super = is_super_admin();
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -22,10 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $full_name = trim($_POST['full_name']);
             $role = $_POST['role'];
             $email = trim($_POST['email']);
+            $is_active = isset($_POST['is_active']) ? 1 : 0;
             $designation_id = !empty($_POST['designation_id']) ? (int)$_POST['designation_id'] : null;
             
             // Division head can only assign to their own division
-            $division_id = is_super_admin() ? (!empty($_POST['division_id']) ? (int)$_POST['division_id'] : null) : $current_division_id;
+            $division_id = $is_super ? (!empty($_POST['division_id']) ? (int)$_POST['division_id'] : null) : $current_division_id;
 
             if ($username && $password && $full_name && $role) {
                 try {
@@ -35,8 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $error = "Username already exists.";
                     } else {
                         $hash = password_hash($password, PASSWORD_DEFAULT);
-                        $stmt = $pdo->prepare("INSERT INTO users (username, password, full_name, role, email, division_id, designation_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                        $stmt->execute([$username, $hash, $full_name, $role, $email, $division_id, $designation_id]);
+                        $stmt = $pdo->prepare("INSERT INTO users (username, password, full_name, role, is_active, email, division_id, designation_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                        $stmt->execute([$username, $hash, $full_name, $role, $is_active, $email, $division_id, $designation_id]);
                         $message = "User created successfully.";
                     }
                 } catch (PDOException $e) {
@@ -51,13 +53,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $full_name = trim($_POST['full_name']);
             $role = $_POST['role'];
             $email = trim($_POST['email']);
+            $is_active = isset($_POST['is_active']) ? 1 : 0;
             $password = $_POST['password']; // optional
             $designation_id = !empty($_POST['designation_id']) ? (int)$_POST['designation_id'] : null;
             
             // Validate edit permission
             // Division head can only edit users in their division
             $can_edit = false;
-            if (is_super_admin()) {
+            if ($is_super) {
                 $can_edit = true;
                 $division_id = !empty($_POST['division_id']) ? (int)$_POST['division_id'] : null;
             } else {
@@ -80,11 +83,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } else {
                         if (!empty($password)) {
                             $hash = password_hash($password, PASSWORD_DEFAULT);
-                            $stmt = $pdo->prepare("UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, email = ?, division_id = ?, designation_id = ? WHERE id = ?");
-                            $stmt->execute([$username, $hash, $full_name, $role, $email, $division_id, $designation_id, $edit_id]);
+                            $stmt = $pdo->prepare("UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, is_active = ?, email = ?, division_id = ?, designation_id = ? WHERE id = ?");
+                            $stmt->execute([$username, $hash, $full_name, $role, $is_active, $email, $division_id, $designation_id, $edit_id]);
                         } else {
-                            $stmt = $pdo->prepare("UPDATE users SET username = ?, full_name = ?, role = ?, email = ?, division_id = ?, designation_id = ? WHERE id = ?");
-                            $stmt->execute([$username, $full_name, $role, $email, $division_id, $designation_id, $edit_id]);
+                            $stmt = $pdo->prepare("UPDATE users SET username = ?, full_name = ?, role = ?, is_active = ?, email = ?, division_id = ?, designation_id = ? WHERE id = ?");
+                            $stmt->execute([$username, $full_name, $role, $is_active, $email, $division_id, $designation_id, $edit_id]);
                         }
                         $message = "User updated successfully.";
                     }
@@ -98,23 +101,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch Users
-if (is_super_admin()) {
-    $stmt = $pdo->query("SELECT u.*, d.name as division_name, ds.name as designation_name FROM users u LEFT JOIN divisions d ON u.division_id = d.id LEFT JOIN designations ds ON u.designation_id = ds.id ORDER BY u.created_at DESC");
-} else {
-    $stmt = $pdo->prepare("SELECT u.*, d.name as division_name, ds.name as designation_name FROM users u LEFT JOIN divisions d ON u.division_id = d.id LEFT JOIN designations ds ON u.designation_id = ds.id WHERE u.division_id = ? ORDER BY u.created_at DESC");
-    $stmt->execute([$current_division_id]);
+// Pagination & Filters
+$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$limit = 10;
+$offset = ($page - 1) * $limit;
+
+$search = trim($_GET['search'] ?? '');
+$filter_division = $_GET['division_id'] ?? '';
+
+// Build Query
+$where_clauses = [];
+$params = [];
+
+if (!$is_super) {
+    $where_clauses[] = "u.division_id = ?";
+    $params[] = $current_division_id;
+} elseif ($filter_division !== '') {
+    $where_clauses[] = "u.division_id = ?";
+    $params[] = $filter_division;
 }
+
+if ($search !== '') {
+    $where_clauses[] = "(u.full_name LIKE ? OR u.username LIKE ? OR u.email LIKE ?)";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
+}
+
+$where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
+
+// Count total
+$count_sql = "SELECT COUNT(*) FROM users u $where_sql";
+$stmt = $pdo->prepare($count_sql);
+$stmt->execute($params);
+$total_users = $stmt->fetchColumn();
+$total_pages = ceil($total_users / $limit);
+
+// Fetch Users
+$sql = "SELECT u.*, d.name as division_name, ds.name as designation_name 
+        FROM users u 
+        LEFT JOIN divisions d ON u.division_id = d.id 
+        LEFT JOIN designations ds ON u.designation_id = ds.id 
+        $where_sql 
+        ORDER BY u.created_at DESC 
+        LIMIT ? OFFSET ?";
+
+$stmt = $pdo->prepare($sql);
+foreach ($params as $key => $val) {
+    $stmt->bindValue($key + 1, $val);
+}
+$stmt->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
+$stmt->bindValue(count($params) + 2, $offset, PDO::PARAM_INT);
+$stmt->execute();
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch Divisions and Designations for dropdowns
 $divisions = [];
-if (is_super_admin()) {
+if ($is_super) {
     $stmt = $pdo->query("SELECT id, name FROM divisions ORDER BY name");
     $divisions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 $stmt = $pdo->query("SELECT id, name FROM designations ORDER BY name");
 $designations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+function buildUserUrl($params_to_update) {
+    $current = $_GET;
+    $merged = array_merge($current, $params_to_update);
+    return '?' . http_build_query($merged);
+}
 ?>
 
 <div class="max-w-7xl mx-auto space-y-6">
@@ -122,7 +176,7 @@ $designations = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <div>
             <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Manage Users</h1>
             <p class="text-slate-500 text-sm mt-1">
-                <?= is_super_admin() ? "Manage all company users." : "Manage users in your division." ?>
+                <?= $is_super ? "Manage all company users." : "Manage users in your division." ?>
             </p>
         </div>
         <button @click="$dispatch('open-modal', {id: 'createUser'})" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2">
@@ -131,18 +185,44 @@ $designations = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
 
     <?php if ($message): ?>
-    <div class="p-4 bg-green-50 text-green-700 border border-green-200 rounded-xl flex items-center gap-3">
+    <div class="p-4 bg-green-50 text-green-700 border border-green-200 rounded-xl flex items-center gap-3 shadow-sm">
         <i class="fas fa-check-circle text-green-500"></i>
         <?= htmlspecialchars($message) ?>
     </div>
     <?php endif; ?>
     
     <?php if ($error): ?>
-    <div class="p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl flex items-center gap-3">
+    <div class="p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl flex items-center gap-3 shadow-sm">
         <i class="fas fa-exclamation-circle text-red-500"></i>
         <?= htmlspecialchars($error) ?>
     </div>
     <?php endif; ?>
+
+    <!-- Controls Bar -->
+    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+        <form method="GET" class="flex flex-col sm:flex-row gap-4">
+            
+            <div class="flex-1 relative">
+                <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Search by name, username or email..." class="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors">
+                <?php if($search): ?>
+                    <a href="<?= buildUserUrl(['search' => '', 'page' => 1]) ?>" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></a>
+                <?php endif; ?>
+            </div>
+            
+            <?php if ($is_super): ?>
+            <select name="division_id" onchange="this.form.submit()" class="px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors min-w-[200px] cursor-pointer">
+                <option value="">All Divisions</option>
+                <?php foreach($divisions as $div): ?>
+                    <option value="<?= $div['id'] ?>" <?= $filter_division == $div['id'] ? 'selected' : '' ?>><?= htmlspecialchars($div['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <?php endif; ?>
+            
+            <!-- Hidden submit -->
+            <button type="submit" class="hidden"></button>
+        </form>
+    </div>
 
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden" x-data="{}">
         <div class="overflow-x-auto">
@@ -159,8 +239,10 @@ $designations = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <tbody class="divide-y divide-slate-100 text-sm text-slate-700">
                     <?php if (count($users) === 0): ?>
                     <tr>
-                        <td colspan="5" class="px-6 py-8 text-center text-slate-500">
-                            No users found.
+                        <td colspan="5" class="px-6 py-12 text-center text-slate-500">
+                            <i class="fas fa-search text-3xl mb-3 text-slate-300"></i>
+                            <p class="font-medium text-slate-600">No users found.</p>
+                            <p class="text-xs text-slate-400 mt-1">Try adjusting your search or filters.</p>
                         </td>
                     </tr>
                     <?php endif; ?>
@@ -186,6 +268,11 @@ $designations = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <?php if($u['designation_name']): ?>
                                     <span class="text-xs text-slate-500 italic"><?= htmlspecialchars($u['designation_name']) ?></span>
                                 <?php endif; ?>
+                                <?php if(!$u['is_active']): ?>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 mt-1 uppercase tracking-wider">
+                                        Inactive
+                                    </span>
+                                <?php endif; ?>
                             </div>
                         </td>
                         <td class="px-6 py-4 text-slate-600">
@@ -203,6 +290,7 @@ $designations = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             full_name: '<?= addslashes($u['full_name']) ?>', 
                                             email: '<?= addslashes($u['email'] ?? '') ?>', 
                                             role: '<?= $u['role'] ?>', 
+                                            is_active: <?= $u['is_active'] ? 'true' : 'false' ?>,
                                             division_id: '<?= $u['division_id'] ?>',
                                             designation_id: '<?= $u['designation_id'] ?>'
                                         }
@@ -217,6 +305,48 @@ $designations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </table>
         </div>
     </div>
+
+    <!-- Pagination -->
+    <?php if ($total_pages > 1): ?>
+    <div class="flex items-center justify-between bg-white px-4 py-3 sm:px-6 rounded-xl border border-slate-200 shadow-sm mt-6">
+        <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+            <div>
+                <p class="text-sm text-slate-700">
+                    Showing <span class="font-medium"><?= $offset + 1 ?></span> to 
+                    <span class="font-medium"><?= min($offset + $limit, $total_users) ?></span> of 
+                    <span class="font-medium"><?= $total_users ?></span> results
+                </p>
+            </div>
+            <div>
+                <nav class="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                    <?php if ($page > 1): ?>
+                    <a href="<?= buildUserUrl(['page' => $page - 1]) ?>" class="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0">
+                        <span class="sr-only">Previous</span>
+                        <i class="fas fa-chevron-left h-4 w-4"></i>
+                    </a>
+                    <?php endif; ?>
+                    
+                    <?php for($i = 1; $i <= $total_pages; $i++): ?>
+                        <?php if ($i == 1 || $i == $total_pages || abs($i - $page) <= 2): ?>
+                            <a href="<?= buildUserUrl(['page' => $i]) ?>" aria-current="page" class="relative inline-flex items-center px-4 py-2 text-sm font-semibold <?= $i === $page ? 'z-10 bg-brand-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600' : 'text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50' ?> focus:z-20">
+                                <?= $i ?>
+                            </a>
+                        <?php elseif (abs($i - $page) == 3): ?>
+                            <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 focus:outline-offset-0">...</span>
+                        <?php endif; ?>
+                    <?php endfor; ?>
+                    
+                    <?php if ($page < $total_pages): ?>
+                    <a href="<?= buildUserUrl(['page' => $page + 1]) ?>" class="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0">
+                        <span class="sr-only">Next</span>
+                        <i class="fas fa-chevron-right h-4 w-4"></i>
+                    </a>
+                    <?php endif; ?>
+                </nav>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <!-- Modal for Create User -->
@@ -294,6 +424,16 @@ $designations = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </select>
                         </div>
                         <?php endif; ?>
+                        <div class="sm:col-span-2 pt-2">
+                            <label class="flex items-center gap-3 cursor-pointer group w-max">
+                                <div class="relative flex items-center">
+                                    <input type="checkbox" name="is_active" value="1" checked class="peer sr-only">
+                                    <div class="w-10 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
+                                </div>
+                                <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">Active Account</span>
+                            </label>
+                            <p class="text-xs text-slate-500 mt-1 ml-13">Active users appear in KPI rankings. Inactive users do not, but retain their historical tasks.</p>
+                        </div>
                     </div>
                     
                     <div class="mt-6 flex gap-3 justify-end pt-4 border-t border-slate-100">
@@ -382,6 +522,16 @@ $designations = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </select>
                         </div>
                         <?php endif; ?>
+                        <div class="sm:col-span-2 pt-2">
+                            <label class="flex items-center gap-3 cursor-pointer group w-max">
+                                <div class="relative flex items-center">
+                                    <input type="checkbox" name="is_active" value="1" x-model="user.is_active" class="peer sr-only">
+                                    <div class="w-10 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
+                                </div>
+                                <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">Active Account</span>
+                            </label>
+                            <p class="text-xs text-slate-500 mt-1 ml-13">Active users appear in KPI rankings. Inactive users do not, but retain their historical tasks.</p>
+                        </div>
                     </div>
                     
                     <div class="mt-6 flex gap-3 justify-end pt-4 border-t border-slate-100">

@@ -18,6 +18,7 @@ if ($is_super) {
                             (SELECT AVG(completion) FROM projects WHERE created_by = u.id) as avg_project_completion
                            FROM users u 
                            LEFT JOIN designations ds ON u.designation_id = ds.id
+                           WHERE u.is_active = 1
                            ORDER BY u.full_name");
     $team_members = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } else {
@@ -31,7 +32,7 @@ if ($is_super) {
                             (SELECT AVG(completion) FROM projects WHERE created_by = u.id) as avg_project_completion
                            FROM users u 
                            LEFT JOIN designations ds ON u.designation_id = ds.id
-                           WHERE u.division_id = ?
+                           WHERE u.division_id = ? AND u.is_active = 1
                            ORDER BY u.full_name");
     $stmt->execute([$division_id]);
     $team_members = $stmt->fetchAll(PDO::FETCH_ASSOC);
