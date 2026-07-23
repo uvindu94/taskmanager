@@ -117,6 +117,56 @@ function getStatusColor($status) {
     ];
     return $colors[$status] ?? 'bg-slate-100 text-slate-600';
 }
+
+// Calculate Top Performers in Division (Last 7 Days KPI)
+$top_handlers = [];
+$stmt = $pdo->prepare("SELECT u.id, u.full_name,
+                        (SELECT SUM(target_value) FROM tasks WHERE assigned_to = u.id AND target_value > 0) as total_target,
+                        (SELECT SUM(p.achievement_value) FROM task_progress p JOIN tasks t ON p.task_id = t.id WHERE t.assigned_to = u.id AND p.date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)) as achieved_7d,
+                        (SELECT COUNT(*) FROM tasks WHERE assigned_to = u.id AND status = 'completed' AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)) as tasks_completed_7d,
+                        (SELECT COUNT(*) FROM projects WHERE created_by = u.id) as total_projects,
+                        (SELECT AVG(completion) FROM projects WHERE created_by = u.id) as avg_project_completion
+                       FROM users u 
+                       WHERE u.division_id = ?
+                       ");
+$stmt->execute([$division_id]);
+$users_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+foreach ($users_data as $u) {
+    $target = (int)$u['total_target'];
+    $achieved = (int)$u['achieved_7d'];
+    $task_kpi = $target > 0 ? min(100, round(($achieved / $target) * 100)) : 0;
+    
+    $proj_kpi = $u['total_projects'] > 0 ? (int)round($u['avg_project_completion']) : 0;
+    
+    if ($target > 0 && $u['total_projects'] > 0) {
+        $kpi_percent = round(($task_kpi + $proj_kpi) / 2);
+    } elseif ($target > 0) {
+        $kpi_percent = $task_kpi;
+    } elseif ($u['total_projects'] > 0) {
+        $kpi_percent = $proj_kpi;
+    } else {
+        $kpi_percent = 0;
+    }
+    
+    $u['tasks_completed_7d'] = (int)$u['tasks_completed_7d'];
+    $u['kpi_percent'] = $kpi_percent;
+    $top_handlers[] = $u;
+}
+
+// Sort by Completed Tasks (DESC), then by KPI (DESC)
+usort($top_handlers, function($a, $b) {
+    if ($a['tasks_completed_7d'] === $b['tasks_completed_7d']) {
+        return $b['kpi_percent'] <=> $a['kpi_percent'];
+    }
+    return $b['tasks_completed_7d'] <=> $a['tasks_completed_7d'];
+});
+
+// Take top 10 active (either completed tasks > 0 OR kpi > 0)
+$top_handlers = array_filter($top_handlers, function($u) { 
+    return $u['tasks_completed_7d'] > 0 || $u['kpi_percent'] > 0; 
+});
+$top_handlers = array_slice($top_handlers, 0, 10);
 ?>
 
 <!-- Include Chart.js -->
@@ -135,6 +185,83 @@ function getStatusColor($status) {
         </a>
         <?php endif; ?>
     </div>
+
+    <!-- Top Projects and Task Handlers -->
+    <?php if (count($top_handlers) > 0): ?>
+    <div class="mb-2">
+        <div class="flex items-center gap-2 mb-4">
+            <i class="fas fa-trophy text-amber-500 text-xl drop-shadow-sm"></i>
+            <h2 class="text-xl font-bold text-slate-800 tracking-tight">Top Performers (Last 7 Days)</h2>
+        </div>
+        
+        <div class="flex overflow-x-auto pb-4 gap-4 snap-x hide-scrollbar">
+            <?php foreach($top_handlers as $index => $handler): 
+                $is_first = $index === 0;
+                $is_second = $index === 1;
+                $is_third = $index === 2;
+                
+                $border_class = 'border-slate-200';
+                $bg_class = 'bg-white';
+                $badge_class = 'bg-slate-100 text-slate-500';
+                $avatar_class = 'bg-slate-100 text-slate-600';
+                
+                if ($is_first) {
+                    $border_class = 'border-amber-300 shadow-amber-100/50 shadow-lg ring-1 ring-amber-100 bg-gradient-to-b from-amber-50/50 to-white';
+                    $badge_class = 'bg-amber-100 text-amber-700 shadow-sm border border-amber-200';
+                    $avatar_class = 'bg-gradient-to-br from-amber-400 to-amber-500 text-white shadow-md';
+                } elseif ($is_second) {
+                    $border_class = 'border-slate-300 shadow-slate-200/50 shadow-md bg-gradient-to-b from-slate-50/50 to-white';
+                    $badge_class = 'bg-slate-200 text-slate-700 shadow-sm border border-slate-300';
+                    $avatar_class = 'bg-gradient-to-br from-slate-300 to-slate-400 text-white shadow-sm';
+                } elseif ($is_third) {
+                    $border_class = 'border-orange-200 shadow-orange-100/50 shadow-md bg-gradient-to-b from-orange-50/20 to-white';
+                    $badge_class = 'bg-orange-100 text-orange-800 shadow-sm border border-orange-200';
+                    $avatar_class = 'bg-gradient-to-br from-orange-300 to-orange-400 text-white shadow-sm';
+                }
+            ?>
+            <div class="min-w-[140px] max-w-[160px] flex-1 rounded-2xl p-4 border <?= $border_class ?> flex flex-col items-center text-center transition-all hover:-translate-y-1 snap-start relative">
+                
+                <?php if ($is_first): ?>
+                    <div class="absolute -top-3 -right-2 transform rotate-12 z-10">
+                        <i class="fas fa-crown text-amber-400 text-3xl drop-shadow-md"></i>
+                    </div>
+                <?php endif; ?>
+                
+                <div class="w-14 h-14 rounded-full <?= $avatar_class ?> flex items-center justify-center font-bold text-xl mb-3 relative z-0">
+                    <?= strtoupper(substr($handler['full_name'], 0, 1)) ?>
+                </div>
+                
+                <div class="font-bold text-slate-800 text-sm line-clamp-1 w-full" title="<?= htmlspecialchars($handler['full_name']) ?>">
+                    <?= htmlspecialchars($handler['full_name']) ?>
+                </div>
+                
+                <div class="mt-3 w-full bg-slate-50 p-2 rounded-lg border border-slate-100 flex flex-col gap-1.5">
+                    <div class="text-[11px] font-bold <?= $is_first ? 'text-amber-600' : 'text-slate-600' ?> flex items-center justify-center gap-1">
+                        <i class="fas fa-check-double text-[10px] opacity-75"></i> <?= $handler['tasks_completed_7d'] ?> Tasks
+                    </div>
+                    <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden group-hover:bg-slate-300 transition-colors" title="<?= $handler['kpi_percent'] ?>% KPI">
+                        <div class="<?= $is_first ? 'bg-amber-400' : 'bg-brand-500' ?> h-1.5 rounded-full" style="width: <?= $handler['kpi_percent'] ?>%"></div>
+                    </div>
+                </div>
+                
+                <div class="absolute top-2 left-2 w-6 h-6 rounded-full <?= $badge_class ?> flex items-center justify-center text-xs font-black">
+                    <?= $index + 1 ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    
+    <style>
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+    <?php endif; ?>
 
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
