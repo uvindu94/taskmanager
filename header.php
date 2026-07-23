@@ -144,6 +144,13 @@ if (isset($_SESSION['user_id'])) {
                     <span class="font-medium">Budget Calculator</span>
                 </a>
                 <?php endif; ?>
+                
+                <?php if (in_array('finance_info', $user_features)): ?>
+                <a href="financeinfo.php" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 text-slate-600 hover:text-brand-600 transition-colors">
+                    <i class="fas fa-file-invoice-dollar w-5 text-center"></i>
+                    <span class="font-medium">Finance Info</span>
+                </a>
+                <?php endif; ?>
             <?php endif; ?>
             
             <?php if (is_super_admin() || is_division_head()): ?>

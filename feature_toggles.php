@@ -36,6 +36,11 @@ $available_features = [
         'name' => 'Budget Calculator',
         'icon' => 'fa-calculator',
         'description' => 'Allows users to calculate project quotations and development costs.'
+    ],
+    'finance_info' => [
+        'name' => 'Finance Info',
+        'icon' => 'fa-file-invoice-dollar',
+        'description' => 'Manage project financial statements, proposals, and track pipeline value.'
     ]
 ];
 

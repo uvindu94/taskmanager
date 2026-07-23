@@ -1,8 +1,23 @@
 <?php
 require_once 'config.php';
+require_once 'header.php';
 
-if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
+// Authorization Check
+if (!is_super_admin()) {
+    $current_div_id = get_user_division();
+    $stmt = $pdo->prepare("SELECT access_level FROM division_features WHERE division_id = ? AND feature_key = 'finance_info'");
+    $stmt->execute([$current_div_id]);
+    $feature = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$feature) {
+        header("Location: dashboard.php");
+        exit;
+    }
+}
+
+// Only Super Admins and Division Heads can edit records
+if (!is_super_admin() && !is_division_head()) {
+    header("Location: financeinfo.php");
     exit;
 }
 
@@ -18,7 +33,14 @@ $stmt->execute([$id]);
 $record = $stmt->fetch();
 
 if (!$record) {
-    die("Record not found.");
+    echo "<div class='p-8 max-w-2xl mx-auto text-center mt-12 bg-white rounded-2xl shadow-sm border border-slate-200'>
+            <i class='fas fa-exclamation-triangle text-4xl text-amber-500 mb-4'></i>
+            <h2 class='text-xl font-bold text-slate-800 mb-2'>Record not found</h2>
+            <p class='text-slate-500 mb-6'>The financial record you are trying to edit does not exist.</p>
+            <a href='financeinfo.php' class='px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors'>Go Back</a>
+          </div>";
+    require_once 'footer.php';
+    exit;
 }
 
 $message = '';
@@ -49,16 +71,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_POST['product_type'],
             $_POST['sales_person_email'],
             $_POST['status'],
-            $_POST['amount'],
+            $_POST['amount'] ?: 0,
             $_POST['sending_date'],
             $_POST['proposal_note'],
             $_POST['general_note'],
             $id
         ]);
         
-        $message = '<div class="alert alert-success" style="background:#d1fae5; color:#065f46; padding:15px; border-radius:8px; margin-bottom:20px;">
-                        <i class="fas fa-check-circle"></i> Record updated successfully! 
-                        <a href="financeinfo.php" style="font-weight:bold; color:#065f46; margin-left:10px;">View All Records</a>
+        $message = '<div x-data="{ show: true }" x-show="show" class="bg-emerald-50 text-emerald-700 p-4 rounded-xl text-sm font-medium border border-emerald-100 flex justify-between items-center shadow-sm mb-6">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-check-circle text-emerald-500 text-lg"></i>
+                            Record updated successfully!
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <a href="financeinfo.php" class="text-emerald-700 hover:text-emerald-900 underline underline-offset-2">View All Records</a>
+                            <button @click="show = false" class="text-emerald-500 hover:text-emerald-700"><i class="fas fa-times"></i></button>
+                        </div>
                     </div>';
         
         // Refresh local record variable to show updated data in form
@@ -67,136 +95,149 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $record = $stmt->fetch();
 
     } catch (PDOException $e) {
-        $message = '<div class="alert alert-danger" style="background:#fee2e2; color:#991b1b; padding:15px; border-radius:8px; margin-bottom:20px;">
-                        Error updating record: ' . $e->getMessage() . '
+        $message = '<div x-data="{ show: true }" x-show="show" class="bg-red-50 text-red-700 p-4 rounded-xl text-sm font-medium border border-red-100 flex justify-between items-center shadow-sm mb-6">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-exclamation-circle text-red-500 text-lg"></i>
+                            Error updating record: ' . htmlspecialchars($e->getMessage()) . '
+                        </div>
+                        <button @click="show = false" class="text-red-500 hover:text-red-700"><i class="fas fa-times"></i></button>
                     </div>';
     }
 }
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Record - <?php echo htmlspecialchars($record['reference_code']); ?></title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="./assets/css/dashboard.css">
-    <style>
-        .form-container { background: #fff; padding: 30px; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .form-group { margin-bottom: 15px; }
-        .form-group.full-width { grid-column: span 2; }
-        .form-group label { display: block; font-weight: 600; margin-bottom: 8px; color: #374151; font-size: 14px; }
-        .form-control { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
-        .form-control:focus { outline: none; border-color: #3b82f6; ring: 2px #3b82f6; }
-        textarea.form-control { height: 100px; resize: vertical; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <div class="header-content">
-                <div class="header-left">
-                    <h1>Edit Financial Record</h1>
-                    <p class="header-subtitle">Updating <?php echo htmlspecialchars($record['reference_code']); ?></p>
+<div class="max-w-4xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Edit Financial Record</h1>
+            <p class="text-slate-500 text-sm mt-1">Updating reference code: <span class="font-bold text-slate-700"><?= htmlspecialchars($record['reference_code']) ?></span></p>
+        </div>
+        <a href="financeinfo.php" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium rounded-xl shadow-sm transition-all flex items-center gap-2">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+
+    <?= $message ?>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <i class="fas fa-edit text-brand-500"></i> Edit Details
+            </h3>
+            <span class="text-xs font-semibold bg-white border border-slate-200 px-3 py-1 rounded-full text-slate-500 shadow-sm">
+                ID: <?= $record['id'] ?>
+            </span>
+        </div>
+        
+        <form method="POST" class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Reference Code -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Reference Code <span class="text-red-500">*</span></label>
+                    <input type="text" name="reference_code" value="<?= htmlspecialchars($record['reference_code']) ?>" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors text-sm" required>
                 </div>
-                <div class="header-actions">
-                    <a href="financeinfo.php" class="btn btn-secondary"><i class="fas fa-times"></i> Cancel</a>
+                
+                <!-- Project Name -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Project Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="project_name" value="<?= htmlspecialchars($record['project_name']) ?>" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors text-sm" required>
+                </div>
+
+                <!-- Sales Category -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Sales Category</label>
+                    <select name="sales_category" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors text-sm cursor-pointer">
+                        <option value="sales" <?= $record['sales_category'] == 'sales' ? 'selected' : '' ?>>Sales</option>
+                        <option value="direct" <?= $record['sales_category'] == 'direct' ? 'selected' : '' ?>>Direct</option>
+                        <option value="other" <?= $record['sales_category'] == 'other' ? 'selected' : '' ?>>Other</option>
+                    </select>
+                </div>
+                
+                <!-- Product -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Product <span class="text-red-500">*</span></label>
+                    <select name="product" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors text-sm cursor-pointer" required>
+                        <?php 
+                        $products = ['Web', 'SSL', 'Hosting', 'Cpanel', 'Fleet Management', 'Other'];
+                        foreach($products as $p) {
+                            $sel = ($record['product'] == $p) ? 'selected' : '';
+                            echo "<option value='$p' $sel>$p</option>";
+                        }
+                        ?>
+                    </select>
+                </div>
+
+                <!-- Product Type -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Product Type <span class="text-red-500">*</span></label>
+                    <select name="product_type" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors text-sm cursor-pointer" required>
+                        <?php 
+                        $types = ['Ecommerce', 'portfolio', 'CRM', 'HRM', 'LMS', 'Multi Domain', 'Single Domain', 'Wild card', 'Tender', 'Other'];
+                        foreach($types as $t) {
+                            $sel = ($record['product_type'] == $t) ? 'selected' : '';
+                            echo "<option value='$t' $sel>$t</option>";
+                        }
+                        ?>
+                    </select>
+                </div>
+                
+                <!-- Status -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Current Status <span class="text-red-500">*</span></label>
+                    <select name="status" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors text-sm cursor-pointer" required>
+                        <?php 
+                        $statuses = ['Proposal Send', 'Quotation Send', 'Invoice Send', 'Tender Send', 'Pending', 'Onboard', 'AMC Send', 'Other'];
+                        foreach($statuses as $s) {
+                            $sel = ($record['status'] == $s) ? 'selected' : '';
+                            echo "<option value='$s' $sel>$s</option>";
+                        }
+                        ?>
+                    </select>
+                </div>
+
+                <!-- Sales Person Email -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Sales Person Email <span class="text-red-500">*</span></label>
+                    <input type="email" name="sales_person_email" value="<?= htmlspecialchars($record['sales_person_email']) ?>" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors text-sm" required>
+                </div>
+                
+                <!-- Amount -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Amount (LKR) <span class="text-red-500">*</span></label>
+                    <input type="number" step="0.01" name="amount" value="<?= htmlspecialchars($record['amount']) ?>" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors text-sm" required>
+                </div>
+                
+                <!-- Sending Date -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Sending Date <span class="text-red-500">*</span></label>
+                    <input type="date" name="sending_date" value="<?= $record['sending_date'] ?>" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors text-sm cursor-pointer" required>
+                </div>
+
+                <!-- Spacer -->
+                <div class="hidden md:block"></div>
+
+                <!-- Notes -->
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Proposal / Quotation Note <span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] ml-1 uppercase tracking-wide">Optional</span></label>
+                    <textarea name="proposal_note" rows="3" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors text-sm resize-y"><?= htmlspecialchars($record['proposal_note']) ?></textarea>
+                </div>
+                
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">General Notes <span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] ml-1 uppercase tracking-wide">Optional</span></label>
+                    <textarea name="general_note" rows="3" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-colors text-sm resize-y"><?= htmlspecialchars($record['general_note']) ?></textarea>
                 </div>
             </div>
-        </div>
 
-        <?php echo $message; ?>
-
-        <div class="form-container">
-            <form method="POST">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Reference Code</label>
-                        <input type="text" name="reference_code" value="<?php echo htmlspecialchars($record['reference_code']); ?>" class="form-control" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Project Name</label>
-                        <input type="text" name="project_name" value="<?php echo htmlspecialchars($record['project_name']); ?>" class="form-control" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Sales Category</label>
-                        <select name="sales_category" class="form-control">
-                            <option value="sales" <?php if($record['sales_category'] == 'sales') echo 'selected'; ?>>Sales</option>
-                            <option value="direct" <?php if($record['sales_category'] == 'direct') echo 'selected'; ?>>Direct</option>
-                            <option value="other" <?php if($record['sales_category'] == 'other') echo 'selected'; ?>>Other</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Product</label>
-                        <select name="product" class="form-control" required>
-                            <?php 
-                            $products = ['Web', 'SSL', 'Hosting', 'Cpanel', 'Fleet Management', 'Other'];
-                            foreach($products as $p) {
-                                $sel = ($record['product'] == $p) ? 'selected' : '';
-                                echo "<option value='$p' $sel>$p</option>";
-                            }
-                            ?>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Product Type</label>
-                        <select name="product_type" class="form-control" required>
-                            <?php 
-                            $types = ['Ecommerce', 'portfolio', 'CRM', 'HRM', 'LMS', 'Multi Domain', 'Single Domain', 'WIld card', 'Tender', 'Other'];
-                            foreach($types as $t) {
-                                $sel = ($record['product_type'] == $t) ? 'selected' : '';
-                                echo "<option value='$t' $sel>$t</option>";
-                            }
-                            ?>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Status</label>
-                        <select name="status" class="form-control" required>
-                            <?php 
-                            $statuses = ['Proposal Send', 'Quotation Send', 'Invoice Send', 'Tender Send', 'Pending', 'Onboard', 'AMC Send', 'Other'];
-                            foreach($statuses as $s) {
-                                $sel = ($record['status'] == $s) ? 'selected' : '';
-                                echo "<option value='$s' $sel>$s</option>";
-                            }
-                            ?>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Sales Person / Email</label>
-                        <input type="text" name="sales_person_email" value="<?php echo htmlspecialchars($record['sales_person_email']); ?>" class="form-control" >
-                    </div>
-                    <div class="form-group">
-                        <label>Amount (Numeric only)</label>
-                        <input type="number" step="0.01" name="amount" value="<?php echo htmlspecialchars($record['amount']); ?>" class="form-control" >
-                    </div>
-                    <div class="form-group">
-                        <label>Sending Date</label>
-                        <input type="date" name="sending_date" value="<?php echo $record['sending_date']; ?>" class="form-control" required>
-                    </div>
-
-                    <div class="form-group full-width">
-                        <label>Note about Proposal / Quotation / Invoice</label>
-                        <textarea name="proposal_note" class="form-control"><?php echo htmlspecialchars($record['proposal_note']); ?></textarea>
-                    </div>
-                    <div class="form-group full-width">
-                        <label>Any other Note</label>
-                        <textarea name="general_note" class="form-control"><?php echo htmlspecialchars($record['general_note']); ?></textarea>
-                    </div>
-                </div>
-
-                <div style="margin-top: 20px; text-align: right;">
-                    <button type="submit" class="btn btn-primary" style="padding: 12px 30px;background-color: cornflowerblue;">
-                        <i class="fas fa-save"></i> Update Financial Record
-                    </button>
-                </div>
-            </form>
-        </div>
+            <div class="mt-8 pt-6 border-t border-slate-100 flex items-center justify-end gap-3">
+                <a href="financeinfo.php" class="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium rounded-xl shadow-sm transition-colors text-sm">
+                    Cancel
+                </a>
+                <button type="submit" class="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2 text-sm focus:ring-2 focus:ring-brand-500 focus:ring-offset-2">
+                    <i class="fas fa-save"></i> Update Record
+                </button>
+            </div>
+        </form>
     </div>
-</body>
-</html>
+</div>
+
+<?php require_once 'footer.php'; ?>
