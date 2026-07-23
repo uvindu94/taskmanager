@@ -225,7 +225,7 @@ function buildUrl($updates = []) {
                 $progress_percent = 100;
             }
             ?>
-            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col h-full group relative">
+            <a href="task_details.php?id=<?= $task['id'] ?>" class="block bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md hover:border-brand-300 transition-all flex flex-col h-full group relative">
                 <?php if($task['status'] === 'completed'): ?>
                     <div class="absolute inset-0 bg-green-500/5 rounded-2xl pointer-events-none"></div>
                 <?php endif; ?>
@@ -238,7 +238,7 @@ function buildUrl($updates = []) {
                 </div>
                 
                 <h3 class="text-lg font-bold text-slate-800 mb-2 group-hover:text-brand-600 transition-colors line-clamp-2 relative z-10">
-                    <a href="task_details.php?id=<?= $task['id'] ?>" class="after:absolute after:inset-0"><?= htmlspecialchars($task['title']) ?></a>
+                    <?= htmlspecialchars($task['title']) ?>
                 </h3>
                 
                 <p class="text-slate-500 text-sm mb-4 line-clamp-2 flex-1 relative z-10">
@@ -273,7 +273,7 @@ function buildUrl($updates = []) {
                         <i class="fas fa-arrow-right text-sm"></i>
                     </div>
                 </div>
-            </div>
+            </a>
         <?php endforeach; ?>
     </div>
 
