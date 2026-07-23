@@ -12,7 +12,10 @@ if ($is_super) {
                             (SELECT COUNT(*) FROM tasks WHERE assigned_to = u.id) as total_tasks,
                             (SELECT COUNT(*) FROM tasks WHERE assigned_to = u.id AND status = 'completed') as completed_tasks,
                             (SELECT SUM(target_value) FROM tasks WHERE assigned_to = u.id AND target_value > 0) as total_target,
-                            (SELECT SUM(p.achievement_value) FROM task_progress p JOIN tasks t ON p.task_id = t.id WHERE t.assigned_to = u.id) as total_achieved
+                            (SELECT SUM(p.achievement_value) FROM task_progress p JOIN tasks t ON p.task_id = t.id WHERE t.assigned_to = u.id) as total_achieved,
+                            (SELECT COUNT(*) FROM projects WHERE created_by = u.id) as total_projects,
+                            (SELECT COUNT(*) FROM projects WHERE created_by = u.id AND status = 'completed') as completed_projects,
+                            (SELECT AVG(completion) FROM projects WHERE created_by = u.id) as avg_project_completion
                            FROM users u 
                            LEFT JOIN designations ds ON u.designation_id = ds.id
                            ORDER BY u.full_name");
@@ -22,7 +25,10 @@ if ($is_super) {
                             (SELECT COUNT(*) FROM tasks WHERE assigned_to = u.id) as total_tasks,
                             (SELECT COUNT(*) FROM tasks WHERE assigned_to = u.id AND status = 'completed') as completed_tasks,
                             (SELECT SUM(target_value) FROM tasks WHERE assigned_to = u.id AND target_value > 0) as total_target,
-                            (SELECT SUM(p.achievement_value) FROM task_progress p JOIN tasks t ON p.task_id = t.id WHERE t.assigned_to = u.id) as total_achieved
+                            (SELECT SUM(p.achievement_value) FROM task_progress p JOIN tasks t ON p.task_id = t.id WHERE t.assigned_to = u.id) as total_achieved,
+                            (SELECT COUNT(*) FROM projects WHERE created_by = u.id) as total_projects,
+                            (SELECT COUNT(*) FROM projects WHERE created_by = u.id AND status = 'completed') as completed_projects,
+                            (SELECT AVG(completion) FROM projects WHERE created_by = u.id) as avg_project_completion
                            FROM users u 
                            LEFT JOIN designations ds ON u.designation_id = ds.id
                            WHERE u.division_id = ?
@@ -74,6 +80,32 @@ if ($selected_member) {
                            $where_sql ORDER BY t.created_at DESC");
     $stmt->execute($params);
     $member_tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Helper to get projects for selected member
+    $proj_where_clauses = ["p.created_by = ?"];
+    $proj_params = [$selected_member['id']];
+    
+    if ($filter_status === 'overdue') {
+        $proj_where_clauses[] = "p.status != 'completed' AND p.status != 'cancelled' AND p.due_date < CURDATE()";
+    } elseif ($filter_status !== 'all' && in_array($filter_status, ['not_yet_start', 'ongoing', 'waiting_for_customer_info', 'completed', 'on_hold', 'cancelled'])) {
+        $proj_where_clauses[] = "p.status = ?";
+        $proj_params[] = $filter_status;
+    }
+    
+    if ($search !== '') {
+        $proj_where_clauses[] = "(p.project LIKE ? OR p.sales_officer LIKE ?)";
+        $proj_params[] = "%$search%";
+        $proj_params[] = "%$search%";
+    }
+    
+    $proj_where_sql = count($proj_where_clauses) > 0 ? "WHERE " . implode(" AND ", $proj_where_clauses) : "";
+    
+    $stmt = $pdo->prepare("SELECT p.*, c.full_name as creator_name
+                           FROM projects p 
+                           LEFT JOIN users c ON p.created_by = c.id
+                           $proj_where_sql ORDER BY p.created_at DESC");
+    $stmt->execute($proj_params);
+    $member_projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 function getStatusBadge($status) {
@@ -86,6 +118,19 @@ function getStatusBadge($status) {
         'overdue' => '<span class="px-2.5 py-1 bg-orange-50 text-orange-600 rounded-md text-xs font-medium border border-orange-200">Overdue</span>'
     ];
     return $badges[$status] ?? $badges['pending'];
+}
+
+function getProjectStatusBadge($status) {
+    $badges = [
+        'not_yet_start' => '<span class="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md text-xs font-medium border border-slate-200">Not Started</span>',
+        'ongoing' => '<span class="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-md text-xs font-medium border border-blue-200">Ongoing</span>',
+        'waiting_for_customer_info' => '<span class="px-2.5 py-1 bg-orange-50 text-orange-600 rounded-md text-xs font-medium border border-orange-200">Waiting on Customer</span>',
+        'completed' => '<span class="px-2.5 py-1 bg-green-50 text-green-600 rounded-md text-xs font-medium border border-green-200">Completed</span>',
+        'on_hold' => '<span class="px-2.5 py-1 bg-purple-50 text-purple-600 rounded-md text-xs font-medium border border-purple-200">On Hold</span>',
+        'cancelled' => '<span class="px-2.5 py-1 bg-red-50 text-red-600 rounded-md text-xs font-medium border border-red-200">Cancelled</span>',
+        'overdue' => '<span class="px-2.5 py-1 bg-orange-50 text-orange-600 rounded-md text-xs font-medium border border-orange-200">Overdue</span>'
+    ];
+    return $badges[$status] ?? $badges['not_yet_start'];
 }
 ?>
 
@@ -124,7 +169,8 @@ function getStatusBadge($status) {
                 <thead>
                     <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                         <th class="px-6 py-4">Team Member</th>
-                        <th class="px-6 py-4">Tasks (Completed/Total)</th>
+                        <th class="px-6 py-4">Tasks</th>
+                        <th class="px-6 py-4">Projects</th>
                         <th class="px-6 py-4">Target Achieved</th>
                         <th class="px-6 py-4">KPI Progress</th>
                         <th class="px-6 py-4 text-right">Actions</th>
@@ -134,7 +180,18 @@ function getStatusBadge($status) {
                     <?php foreach($team_members as $member): 
                         $target = (int)$member['total_target'];
                         $achieved = (int)$member['total_achieved'];
-                        $kpi_percent = $target > 0 ? min(100, round(($achieved / $target) * 100)) : 0;
+                        $task_kpi = $target > 0 ? min(100, round(($achieved / $target) * 100)) : 0;
+                        $proj_kpi = $member['total_projects'] > 0 ? (int)round($member['avg_project_completion']) : 0;
+                        
+                        if ($target > 0 && $member['total_projects'] > 0) {
+                            $kpi_percent = round(($task_kpi + $proj_kpi) / 2);
+                        } elseif ($target > 0) {
+                            $kpi_percent = $task_kpi;
+                        } elseif ($member['total_projects'] > 0) {
+                            $kpi_percent = $proj_kpi;
+                        } else {
+                            $kpi_percent = 0;
+                        }
                     ?>
                     <tr class="hover:bg-slate-50/50 transition-colors group">
                         <td class="px-6 py-4">
@@ -155,6 +212,12 @@ function getStatusBadge($status) {
                             </div>
                         </td>
                         <td class="px-6 py-4">
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-lg font-bold text-slate-800"><?= $member['completed_projects'] ?></span>
+                                <span class="text-sm font-medium text-slate-400">/ <?= $member['total_projects'] ?></span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
                             <?php if ($target > 0): ?>
                                 <div class="font-medium text-slate-700"><?= $achieved ?> <span class="text-slate-400 text-xs font-normal">out of</span> <?= $target ?></div>
                             <?php else: ?>
@@ -162,7 +225,7 @@ function getStatusBadge($status) {
                             <?php endif; ?>
                         </td>
                         <td class="px-6 py-4 w-64">
-                            <?php if ($target > 0): ?>
+                            <?php if ($target > 0 || $member['total_projects'] > 0): ?>
                             <div class="flex items-center gap-3">
                                 <div class="w-full bg-slate-100 rounded-full h-2">
                                     <div class="h-2 rounded-full transition-all duration-1000 <?= $kpi_percent >= 100 ? 'bg-green-500' : 'bg-brand-500' ?>" style="width: <?= $kpi_percent ?>%"></div>
@@ -197,7 +260,18 @@ function getStatusBadge($status) {
     <?php 
     $target = (int)$selected_member['total_target'];
     $achieved = (int)$selected_member['total_achieved'];
-    $kpi_percent = $target > 0 ? min(100, round(($achieved / $target) * 100)) : 0;
+    $task_kpi = $target > 0 ? min(100, round(($achieved / $target) * 100)) : 0;
+    $proj_kpi = $selected_member['total_projects'] > 0 ? (int)round($selected_member['avg_project_completion']) : 0;
+    
+    if ($target > 0 && $selected_member['total_projects'] > 0) {
+        $kpi_percent = round(($task_kpi + $proj_kpi) / 2);
+    } elseif ($target > 0) {
+        $kpi_percent = $task_kpi;
+    } elseif ($selected_member['total_projects'] > 0) {
+        $kpi_percent = $proj_kpi;
+    } else {
+        $kpi_percent = 0;
+    }
     ?>
     
     <!-- Member Summary Card -->
@@ -214,14 +288,22 @@ function getStatusBadge($status) {
             </div>
         </div>
         
-        <div class="flex-1 w-full z-10 grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="flex-1 w-full z-10 grid grid-cols-2 lg:grid-cols-6 gap-6">
             <div>
                 <div class="text-sm font-medium text-slate-500 mb-1">Total Tasks</div>
                 <div class="text-2xl font-bold text-slate-800"><?= $selected_member['total_tasks'] ?></div>
             </div>
             <div>
-                <div class="text-sm font-medium text-slate-500 mb-1">Completed</div>
+                <div class="text-sm font-medium text-slate-500 mb-1">Done</div>
                 <div class="text-2xl font-bold text-green-600"><?= $selected_member['completed_tasks'] ?></div>
+            </div>
+            <div>
+                <div class="text-sm font-medium text-slate-500 mb-1">Total Projects</div>
+                <div class="text-2xl font-bold text-slate-800"><?= $selected_member['total_projects'] ?></div>
+            </div>
+            <div>
+                <div class="text-sm font-medium text-slate-500 mb-1">Done</div>
+                <div class="text-2xl font-bold text-green-600"><?= $selected_member['completed_projects'] ?></div>
             </div>
             <div class="col-span-2 lg:col-span-2">
                 <div class="flex justify-between items-end mb-1">
@@ -336,6 +418,69 @@ function getStatusBadge($status) {
             </a>
         <?php endforeach; ?>
     </div>
+    
+    <!-- Projects Grid -->
+    <?php if (count($member_projects) > 0 || $filter_status !== 'all' || $search !== ''): ?>
+    <div class="flex items-center justify-between mt-12 mb-6">
+        <h3 class="text-xl font-bold text-slate-800">Owned Projects</h3>
+        <span class="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-full"><?= count($member_projects) ?> Projects</span>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <?php if (count($member_projects) === 0): ?>
+            <div class="col-span-full py-12 text-center text-slate-500 bg-white rounded-2xl border border-slate-200">
+                <i class="fas fa-project-diagram text-4xl mb-3 text-slate-300"></i>
+                <p>No projects match your filters.</p>
+            </div>
+        <?php endif; ?>
+        
+        <?php foreach ($member_projects as $project): ?>
+            <a href="project_details.php?id=<?= $project['id'] ?>" class="block bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md hover:border-brand-300 transition-all flex flex-col h-full group relative">
+                
+                <div class="flex justify-between items-start mb-3 relative z-10">
+                    <?= getProjectStatusBadge($project['status']) ?>
+                    <?php if ($project['project_link']): ?>
+                        <span class="text-xs text-brand-500 bg-brand-50 px-2 py-1 rounded-md font-medium border border-brand-100" title="Project Link attached">
+                            <i class="fas fa-link"></i> Link
+                        </span>
+                    <?php endif; ?>
+                </div>
+                
+                <h3 class="text-lg font-bold text-slate-800 mb-2 group-hover:text-brand-600 transition-colors line-clamp-2 relative z-10">
+                    <?= htmlspecialchars($project['project']) ?>
+                </h3>
+                
+                <div class="text-slate-500 text-sm mb-4 space-y-1 relative z-10">
+                    <div><span class="font-medium text-slate-600">Sales Officer:</span> <?= htmlspecialchars($project['sales_officer']) ?: '<span class="italic text-slate-400">Unassigned</span>' ?></div>
+                </div>
+                
+                <div class="mb-4 relative z-10">
+                    <div class="flex justify-between text-xs text-slate-500 mb-1 font-medium">
+                        <span>Completion Rate</span>
+                        <span class="<?= $project['completion'] >= 100 ? 'text-green-600' : '' ?>"><?= number_format($project['completion'], 0) ?>%</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div class="<?= $project['completion'] >= 100 ? 'bg-green-500' : 'bg-brand-500' ?> h-2 rounded-full transition-all duration-500" style="width: <?= min(100, $project['completion']) ?>%"></div>
+                    </div>
+                </div>
+                
+                <div class="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between relative z-10">
+                    <div class="flex items-center gap-2">
+                        <div class="text-xs text-slate-500 min-w-0">
+                            <div class="text-slate-400">Created by <span class="font-medium text-slate-600"><?= htmlspecialchars($project['creator_name']) ?></span></div>
+                            <div class="<?= strtotime($project['due_date']) < time() && !in_array($project['status'], ['completed', 'cancelled']) ? 'text-red-500 font-semibold' : '' ?>">
+                                Due <?= $project['due_date'] ? date('M j, Y', strtotime($project['due_date'])) : 'N/A' ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="w-8 h-8 flex items-center justify-center text-slate-400 group-hover:text-brand-600 group-hover:bg-brand-50 rounded-lg transition-colors shrink-0">
+                        <i class="fas fa-arrow-right text-sm"></i>
+                    </div>
+                </div>
+            </a>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
     
     <?php endif; ?>
 
