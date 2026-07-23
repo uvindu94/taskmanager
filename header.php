@@ -112,6 +112,11 @@ require_once 'config.php';
                 <span class="font-medium">Team KPIs</span>
             </a>
             
+            <a href="projects.php" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 text-slate-600 hover:text-brand-600 transition-colors">
+                <i class="fas fa-project-diagram w-5 text-center"></i>
+                <span class="font-medium">Projects</span>
+            </a>
+            
             <?php if (is_super_admin() || is_division_head()): ?>
                 <div class="mt-6 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider px-3">Administration</div>
                 <a href="manage_users.php" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 text-slate-600 hover:text-brand-600 transition-colors">
