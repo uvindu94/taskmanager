@@ -107,6 +107,22 @@ if (is_super_admin()) {
 }
 $recent_tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Fetch Team KPIs for Division Head
+$team_kpis = [];
+if (is_division_head()) {
+    $stmt = $pdo->prepare("SELECT u.id, u.full_name, u.role, ds.name as designation,
+                            (SELECT COUNT(*) FROM tasks WHERE assigned_to = u.id) as total_tasks,
+                            (SELECT COUNT(*) FROM tasks WHERE assigned_to = u.id AND status = 'completed') as completed_tasks,
+                            (SELECT SUM(target_value) FROM tasks WHERE assigned_to = u.id AND target_value > 0) as total_target,
+                            (SELECT SUM(p.achievement_value) FROM task_progress p JOIN tasks t ON p.task_id = t.id WHERE t.assigned_to = u.id) as total_achieved
+                           FROM users u 
+                           LEFT JOIN designations ds ON u.designation_id = ds.id
+                           WHERE u.division_id = ? AND u.role != 'division_head' 
+                           ORDER BY u.full_name");
+    $stmt->execute([$division_id]);
+    $team_kpis = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 function getStatusColor($status) {
     $colors = [
         'pending' => 'bg-slate-100 text-slate-600',
@@ -215,6 +231,68 @@ function getStatusColor($status) {
             </div>
         </div>
     </div>
+    
+    <!-- Team Member KPIs (Division Head Only) -->
+    <?php if (is_division_head() && !empty($team_kpis)): ?>
+    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm mt-6">
+        <h3 class="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <i class="fas fa-users text-brand-500"></i> Team Member KPIs
+        </h3>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        <th class="px-4 py-3 rounded-tl-lg">Team Member</th>
+                        <th class="px-4 py-3">Tasks (Completed/Total)</th>
+                        <th class="px-4 py-3">Target Achieved</th>
+                        <th class="px-4 py-3 rounded-tr-lg">KPI Progress</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-sm text-slate-700">
+                    <?php foreach($team_kpis as $member): 
+                        $target = (int)$member['total_target'];
+                        $achieved = (int)$member['total_achieved'];
+                        $kpi_percent = $target > 0 ? min(100, round(($achieved / $target) * 100)) : 0;
+                    ?>
+                    <tr class="hover:bg-slate-50/50 transition-colors">
+                        <td class="px-4 py-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs shrink-0">
+                                    <?= strtoupper(substr($member['full_name'], 0, 1)) ?>
+                                </div>
+                                <div>
+                                    <div class="font-bold text-slate-900"><?= htmlspecialchars($member['full_name']) ?></div>
+                                    <div class="text-xs text-slate-500"><?= htmlspecialchars($member['designation'] ?? 'Team Member') ?></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4">
+                            <span class="font-medium text-slate-900"><?= $member['completed_tasks'] ?></span>
+                            <span class="text-slate-400">/ <?= $member['total_tasks'] ?></span>
+                        </td>
+                        <td class="px-4 py-4 font-medium text-slate-700">
+                            <?= $target > 0 ? "$achieved / $target" : "<span class='text-slate-400 italic text-xs'>No targets set</span>" ?>
+                        </td>
+                        <td class="px-4 py-4">
+                            <?php if ($target > 0): ?>
+                            <div class="flex items-center gap-3">
+                                <div class="w-full bg-slate-100 rounded-full h-2 max-w-[100px]">
+                                    <div class="h-2 rounded-full <?= $kpi_percent >= 100 ? 'bg-green-500' : 'bg-brand-500' ?>" style="width: <?= $kpi_percent ?>%"></div>
+                                </div>
+                                <span class="font-bold text-xs <?= $kpi_percent >= 100 ? 'text-green-600' : 'text-slate-700' ?>"><?= $kpi_percent ?>%</span>
+                            </div>
+                            <?php else: ?>
+                            <span class="text-slate-300">-</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <script>

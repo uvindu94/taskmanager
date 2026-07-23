@@ -48,7 +48,9 @@ if ($is_admin) {
 }
 
 // Status filter
-if ($filter_status !== 'all') {
+if ($filter_status === 'overdue') {
+    $where_clauses[] = "t.status != 'completed' AND t.due_date < CURDATE()";
+} elseif ($filter_status !== 'all') {
     $where_clauses[] = "t.status = ?";
     $params[] = $filter_status;
 }
@@ -177,6 +179,7 @@ function buildUrl($updates = []) {
                 <option value="completed" <?= $filter_status === 'completed' ? 'selected' : '' ?>>Completed</option>
                 <option value="reopened" <?= $filter_status === 'reopened' ? 'selected' : '' ?>>Reopened</option>
                 <option value="forwarded" <?= $filter_status === 'forwarded' ? 'selected' : '' ?>>Forwarded</option>
+                <option value="overdue" <?= $filter_status === 'overdue' ? 'selected' : '' ?>>Overdue</option>
             </select>
             
             <!-- Team Member Filter -->
