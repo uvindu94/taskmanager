@@ -167,6 +167,15 @@ $top_handlers = array_filter($top_handlers, function($u) {
     return $u['tasks_completed_7d'] > 0 || $u['kpi_percent'] > 0; 
 });
 $top_handlers = array_slice($top_handlers, 0, 10);
+
+// Fetch Pending Tasks for the current user
+$stmt = $pdo->prepare("SELECT t.id, t.title, t.status, t.priority, t.due_date, t.target_value,
+                        (SELECT SUM(achievement_value) FROM task_progress p WHERE p.task_id = t.id) as achieved
+                       FROM tasks t 
+                       WHERE t.assigned_to = ? AND t.status != 'completed' 
+                       ORDER BY t.due_date ASC");
+$stmt->execute([$user_id]);
+$my_pending_tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!-- Include Chart.js -->
@@ -261,6 +270,82 @@ $top_handlers = array_slice($top_handlers, 0, 10);
             scrollbar-width: none;
         }
     </style>
+    <?php endif; ?>
+
+    <!-- My Pending Tasks -->
+    <?php if (count($my_pending_tasks) > 0): ?>
+    <div class="mb-4">
+        <div class="flex items-center gap-2 mb-4">
+            <i class="fas fa-tasks text-brand-500 text-xl"></i>
+            <h2 class="text-xl font-bold text-slate-800 tracking-tight">My Pending Tasks</h2>
+            <span class="bg-red-100 text-red-600 text-xs font-bold px-2.5 py-0.5 rounded-full shadow-sm animate-pulse ml-2"><?= count($my_pending_tasks) ?> Action Required</span>
+        </div>
+        
+        <div class="flex overflow-x-auto pb-6 gap-4 snap-x hide-scrollbar px-1">
+            <?php foreach($my_pending_tasks as $task): 
+                $is_overdue = $task['due_date'] && strtotime($task['due_date']) < time();
+                $is_high_priority = strtolower($task['priority']) === 'high' || strtolower($task['priority']) === 'urgent';
+                
+                $border_class = 'border-slate-200';
+                if ($is_overdue) {
+                    $border_class = 'border-red-300 ring-2 ring-red-100 ring-offset-2';
+                } elseif ($is_high_priority) {
+                    $border_class = 'border-orange-300 ring-2 ring-orange-100 ring-offset-2';
+                }
+                
+                // Progress
+                $target = (int)$task['target_value'];
+                $achieved = (int)$task['achieved'];
+                $progress_pct = $target > 0 ? min(100, round(($achieved / $target) * 100)) : 0;
+            ?>
+            <a href="task_details.php?id=<?= $task['id'] ?>" class="min-w-[260px] max-w-[280px] flex-1 rounded-2xl p-5 bg-white border <?= $border_class ?> flex flex-col transition-all hover:-translate-y-1.5 hover:shadow-lg snap-start relative group cursor-pointer">
+                
+                <?php if ($is_overdue): ?>
+                    <div class="absolute -top-1.5 -right-1.5">
+                        <span class="flex h-3 w-3">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500 shadow-sm border border-white"></span>
+                        </span>
+                    </div>
+                <?php elseif ($is_high_priority): ?>
+                    <div class="absolute -top-1.5 -right-1.5">
+                        <span class="flex h-3 w-3">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" style="animation-duration: 2s;"></span>
+                          <span class="relative inline-flex rounded-full h-3 w-3 bg-orange-500 shadow-sm border border-white"></span>
+                        </span>
+                    </div>
+                <?php endif; ?>
+                
+                <div class="flex justify-between items-start mb-3">
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded capitalize <?= getStatusColor($task['status']) ?> shadow-sm border border-white/50"><?= str_replace('_', ' ', $task['status']) ?></span>
+                    <?php if ($task['due_date']): ?>
+                        <span class="text-[11px] font-bold <?= $is_overdue ? 'text-red-500 bg-red-50 px-1.5 py-0.5 rounded' : 'text-slate-400' ?> flex items-center gap-1.5">
+                            <i class="far fa-clock"></i> <?= date('M j', strtotime($task['due_date'])) ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+                
+                <h4 class="font-bold text-slate-800 text-sm leading-snug line-clamp-2 mb-4 group-hover:text-brand-600 transition-colors flex-1" title="<?= htmlspecialchars($task['title']) ?>">
+                    <?= htmlspecialchars($task['title']) ?>
+                </h4>
+                
+                <?php if ($target > 0): ?>
+                <div class="mt-auto bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <div class="flex justify-between items-center text-[10px] text-slate-500 font-bold mb-1.5 uppercase tracking-wide">
+                        <span>Progress</span>
+                        <span class="<?= $progress_pct >= 100 ? 'text-green-600' : 'text-brand-600' ?> font-black"><?= $progress_pct ?>%</span>
+                    </div>
+                    <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                        <div class="<?= $progress_pct >= 100 ? 'bg-green-500' : 'bg-brand-500' ?> h-1.5 rounded-full transition-all group-hover:brightness-110" style="width: <?= $progress_pct ?>%"></div>
+                    </div>
+                </div>
+                <?php else: ?>
+                <div class="mt-auto text-[11px] text-slate-400 font-semibold italic bg-slate-50 px-3 py-2 rounded-xl text-center border border-slate-100">No target set</div>
+                <?php endif; ?>
+            </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
     <?php endif; ?>
 
     <!-- Stats Grid -->

@@ -143,12 +143,19 @@ require_once 'config.php';
                     <?= substr($_SESSION['username'], 0, 1) ?>
                 </div>
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium text-slate-900 truncate"><?= htmlspecialchars($_SESSION['username']) ?></p>
-                    <p class="text-xs text-slate-500 truncate capitalize"><?= str_replace('_', ' ', $_SESSION['role']) ?></p>
+                    <a href="profile.php" class="block hover:opacity-80 transition-opacity" title="View Profile">
+                        <p class="text-sm font-medium text-slate-900 truncate"><?= htmlspecialchars($_SESSION['username']) ?></p>
+                        <p class="text-xs text-slate-500 truncate capitalize"><?= str_replace('_', ' ', $_SESSION['role']) ?></p>
+                    </a>
                 </div>
-                <a href="logout.php" class="text-slate-400 hover:text-red-500 transition-colors" title="Logout">
-                    <i class="fas fa-sign-out-alt"></i>
-                </a>
+                <div class="flex gap-3">
+                    <a href="profile.php" class="text-slate-400 hover:text-brand-500 transition-colors" title="Profile Settings">
+                        <i class="fas fa-user-cog"></i>
+                    </a>
+                    <a href="logout.php" class="text-slate-400 hover:text-red-500 transition-colors" title="Logout">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
             </div>
         </div>
     </aside>

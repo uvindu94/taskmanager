@@ -1,764 +1,248 @@
 <?php
-// profile.php - User Profile and Statistics
-require_once 'config.php';
-
-// Check if user is logged in
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
+require_once 'header.php';
 
 $user_id = $_SESSION['user_id'];
 $success = '';
 $error = '';
 
-// Handle profile update
-if (isset($_POST['update_profile'])) {
-    $username = trim($_POST['username']);
-    $full_name = trim($_POST['full_name']);
-    $current_password = $_POST['current_password'];
-    $new_password = $_POST['new_password'];
-    $confirm_password = $_POST['confirm_password'];
+// Handle Password Reset
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'change_password') {
+    $current_password = $_POST['current_password'] ?? '';
+    $new_password = $_POST['new_password'] ?? '';
+    $confirm_password = $_POST['confirm_password'] ?? '';
     
-    // Validate input
-    if (empty($username) || empty($full_name)) {
-        $error = "Username and full name are required.";
+    // Verify current password
+    $stmt = $pdo->prepare("SELECT password FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
+    $hash = $stmt->fetchColumn();
+    
+    if (!password_verify($current_password, $hash)) {
+        $error = "Current password is incorrect.";
+    } elseif (strlen($new_password) < 6) {
+        $error = "New password must be at least 6 characters long.";
+    } elseif ($new_password !== $confirm_password) {
+        $error = "New passwords do not match.";
     } else {
-        // Check if username is already taken by another user
-        $query = "SELECT id FROM users WHERE username = :username AND id != :user_id";
-        $stmt = $pdo->prepare($query);
-        $stmt->bindParam(':username', $username);
-        $stmt->bindParam(':user_id', $user_id);
-        $stmt->execute();
-        
-        if ($stmt->rowCount() > 0) {
-            $error = "Username is already taken by another user.";
-        } else {
-            // Update basic info
-            $query = "UPDATE users SET username = :username, full_name = :full_name WHERE id = :user_id";
-            $stmt = $pdo->prepare($query);
-            $stmt->bindParam(':username', $username);
-            $stmt->bindParam(':full_name', $full_name);
-            $stmt->bindParam(':user_id', $user_id);
-            
-            if ($stmt->execute()) {
-                $_SESSION['username'] = $username;
-                $success = "Profile updated successfully!";
-                
-                // Handle password change if provided
-                if (!empty($current_password) && !empty($new_password)) {
-                    // Verify current password
-                    $query = "SELECT password FROM users WHERE id = :user_id";
-                    $stmt = $pdo->prepare($query);
-                    $stmt->bindParam(':user_id', $user_id);
-                    $stmt->execute();
-                    $user_data = $stmt->fetch(PDO::FETCH_ASSOC);
-                    
-                    if (password_verify($current_password, $user_data['password'])) {
-                        if ($new_password === $confirm_password) {
-                            if (strlen($new_password) >= 6) {
-                                $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-                                $query = "UPDATE users SET password = :password WHERE id = :user_id";
-                                $stmt = $pdo->prepare($query);
-                                $stmt->bindParam(':password', $hashed_password);
-                                $stmt->bindParam(':user_id', $user_id);
-                                $stmt->execute();
-                                $success .= " Password changed successfully!";
-                            } else {
-                                $error = "New password must be at least 6 characters long.";
-                            }
-                        } else {
-                            $error = "New passwords do not match.";
-                        }
-                    } else {
-                        $error = "Current password is incorrect.";
-                    }
-                }
-            } else {
-                $error = "Failed to update profile.";
-            }
-        }
+        $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
+        $stmt->execute([$new_hash, $user_id]);
+        $success = "Your password has been changed successfully.";
     }
 }
 
-// Fetch user information
-$query = "SELECT * FROM users WHERE id = :user_id";
-$stmt = $pdo->prepare($query);
-$stmt->bindParam(':user_id', $user_id);
-$stmt->execute();
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
+// Fetch User Info
+$stmt = $pdo->prepare("SELECT u.*, d.name as division_name, ds.name as designation_name
+                       FROM users u
+                       LEFT JOIN divisions d ON u.division_id = d.id
+                       LEFT JOIN designations ds ON u.designation_id = ds.id
+                       WHERE u.id = ?");
+$stmt->execute([$user_id]);
+$user_info = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Fetch task statistics
-$query = "SELECT 
-    COUNT(*) as total_tasks,
-    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_tasks,
-    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks,
-    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks
-FROM tasks WHERE assigned_to = :user_id";
-$stmt = $pdo->prepare($query);
-$stmt->bindParam(':user_id', $user_id);
-$stmt->execute();
-$task_stats = $stmt->fetch(PDO::FETCH_ASSOC);
+// Fetch Recent Activities
+$activities = [];
 
-// Fetch tasks created by user
-$query = "SELECT COUNT(*) as tasks_created FROM tasks WHERE created_by = :user_id";
-$stmt = $pdo->prepare($query);
-$stmt->bindParam(':user_id', $user_id);
-$stmt->execute();
-$created_stats = $stmt->fetch(PDO::FETCH_ASSOC);
+// Tasks completed
+$stmt = $pdo->prepare("SELECT id, title, completed_at as date FROM tasks WHERE assigned_to = ? AND status = 'completed' AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT 5");
+$stmt->execute([$user_id]);
+foreach($stmt->fetchAll() as $row) {
+    $activities[] = [
+        'icon' => 'fa-check-circle',
+        'color' => 'text-green-600',
+        'bg' => 'bg-green-100',
+        'title' => 'Completed a Task',
+        'description' => "You completed the task <strong>" . htmlspecialchars($row['title']) . "</strong>.",
+        'date' => $row['date'],
+        'link' => "task_details.php?id={$row['id']}"
+    ];
+}
 
-// Fetch overdue tasks
-$query = "SELECT COUNT(*) as overdue_tasks 
-FROM tasks 
-WHERE assigned_to = :user_id 
-AND due_date < CURDATE() 
-AND status != 'completed'";
-$stmt = $pdo->prepare($query);
-$stmt->bindParam(':user_id', $user_id);
-$stmt->execute();
-$overdue_stats = $stmt->fetch(PDO::FETCH_ASSOC);
+// Projects created
+$stmt = $pdo->prepare("SELECT id, project, created_at as date FROM projects WHERE created_by = ? ORDER BY created_at DESC LIMIT 5");
+$stmt->execute([$user_id]);
+foreach($stmt->fetchAll() as $row) {
+    $activities[] = [
+        'icon' => 'fa-project-diagram',
+        'color' => 'text-brand-600',
+        'bg' => 'bg-brand-100',
+        'title' => 'Created a Project',
+        'description' => "You created a new project: <strong>" . htmlspecialchars($row['project']) . "</strong>.",
+        'date' => $row['date'],
+        'link' => "project_details.php?id={$row['id']}"
+    ];
+}
 
-// Fetch upcoming tasks (due in next 7 days)
-$query = "SELECT COUNT(*) as upcoming_tasks 
-FROM tasks 
-WHERE assigned_to = :user_id 
-AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
-AND status != 'completed'";
-$stmt = $pdo->prepare($query);
-$stmt->bindParam(':user_id', $user_id);
-$stmt->execute();
-$upcoming_stats = $stmt->fetch(PDO::FETCH_ASSOC);
+// Remarks left on tasks
+$stmt = $pdo->prepare("SELECT r.id, r.task_id, r.remark, r.created_at as date, t.title 
+                       FROM task_remarks r 
+                       JOIN tasks t ON r.task_id = t.id 
+                       WHERE r.created_by = ? AND r.remark NOT LIKE '<em>%' ORDER BY r.created_at DESC LIMIT 5");
+$stmt->execute([$user_id]);
+foreach($stmt->fetchAll() as $row) {
+    $activities[] = [
+        'icon' => 'fa-comment-alt',
+        'color' => 'text-indigo-600',
+        'bg' => 'bg-indigo-100',
+        'title' => 'Commented on a Task',
+        'description' => "You added a remark to <strong>" . htmlspecialchars($row['title']) . "</strong>.",
+        'date' => $row['date'],
+        'link' => "task_details.php?id={$row['task_id']}"
+    ];
+}
 
-// Fetch project statistics
-$query = "SELECT COUNT(*) as total_projects FROM projects WHERE created_by = :user_id";
-$stmt = $pdo->prepare($query);
-$stmt->bindParam(':user_id', $user_id);
-$stmt->execute();
-$project_stats = $stmt->fetch(PDO::FETCH_ASSOC);
-
-// Fetch recent activities
-$query = "SELECT th.*, t.title as task_title 
-FROM task_history th
-LEFT JOIN tasks t ON th.task_id = t.id
-WHERE th.performed_by = :user_id
-ORDER BY th.performed_at DESC
-LIMIT 10";
-$stmt = $pdo->prepare($query);
-$stmt->bindParam(':user_id', $user_id);
-$stmt->execute();
-$recent_activities = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Fetch task remarks count
-$query = "SELECT COUNT(*) as remarks_count FROM task_remarks WHERE created_by = :user_id";
-$stmt = $pdo->prepare($query);
-$stmt->bindParam(':user_id', $user_id);
-$stmt->execute();
-$remarks_stats = $stmt->fetch(PDO::FETCH_ASSOC);
-
-// Fetch projects user is working on (as sales officer or creator)
-$query = "SELECT COUNT(*) as active_projects 
-FROM projects 
-WHERE (created_by = :user_id OR sales_officer LIKE CONCAT('%', (SELECT username FROM users WHERE id = :user_id2), '%'))
-AND status != 'completed'";
-$stmt = $pdo->prepare($query);
-$stmt->bindParam(':user_id', $user_id);
-$stmt->bindParam(':user_id2', $user_id);
-$stmt->execute();
-$active_projects = $stmt->fetch(PDO::FETCH_ASSOC);
-
-// Calculate completion rate
-$completion_rate = $task_stats['total_tasks'] > 0 
-    ? round(($task_stats['completed_tasks'] / $task_stats['total_tasks']) * 100, 1) 
-    : 0;
-
-// Calculate member since days
-$member_since = new DateTime($user['created_at']);
-$today = new DateTime();
-$days_member = $today->diff($member_since)->days;
-
-// Get user permissions
-$user_permissions = isset($rolePermissions[$user['role']]) ? $rolePermissions[$user['role']] : [];
+// Sort activities by date descending
+usort($activities, function($a, $b) {
+    return strtotime($b['date']) <=> strtotime($a['date']);
+});
+$activities = array_slice($activities, 0, 10);
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profile - <?php echo htmlspecialchars($user['full_name']); ?></title>
-        <link rel="icon" type="image/png" href="./assets/fav.png">
-
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .header {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .header h1 {
-            color: #333;
-            font-size: 24px;
-        }
-        
-        .btn {
-            padding: 10px 20px;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s;
-            display: inline-block;
-        }
-        
-        .btn:hover {
-            background: #5568d3;
-        }
-        
-        .btn-secondary {
-            background: #6c757d;
-        }
-        
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        .profile-grid {
-            display: grid;
-            grid-template-columns: 350px 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .profile-card {
-            background: white;
-            border-radius: 10px;
-            padding: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        
-        .profile-header {
-            text-align: center;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #f0f0f0;
-            margin-bottom: 20px;
-        }
-        
-        .profile-avatar {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 15px;
-            font-size: 48px;
-            color: white;
-            font-weight: bold;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-        }
-        
-        .profile-name {
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 5px;
-        }
-        
-        .profile-role {
-            color: #667eea;
-            font-size: 16px;
-            font-weight: 500;
-        }
-        
-        .profile-info {
-            margin-top: 20px;
-        }
-        
-        .info-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid #f0f0f0;
-        }
-        
-        .info-item:last-child {
-            border-bottom: none;
-        }
-        
-        .info-label {
-            color: #666;
-            font-weight: 500;
-        }
-        
-        .info-value {
-            color: #333;
-            font-weight: 600;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .stat-card {
-            background: white;
-            border-radius: 10px;
-            padding: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            text-align: center;
-            transition: transform 0.3s, box-shadow 0.3s;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 15px rgba(0,0,0,0.2);
-        }
-        
-        .stat-icon {
-            font-size: 36px;
-            margin-bottom: 10px;
-        }
-        
-        .stat-value {
-            font-size: 36px;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            color: #666;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .stat-card.primary .stat-value { color: #667eea; }
-        .stat-card.success .stat-value { color: #10b981; }
-        .stat-card.warning .stat-value { color: #f59e0b; }
-        .stat-card.danger .stat-value { color: #ef4444; }
-        .stat-card.info .stat-value { color: #3b82f6; }
-        
-        .content-section {
-            background: white;
-            border-radius: 10px;
-            padding: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        
-        .section-title {
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #f0f0f0;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e5e7eb;
-            border-radius: 5px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-        
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .form-group input:disabled {
-            background: #f9fafb;
-            cursor: not-allowed;
-        }
-        
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        
-        .password-section {
-            background: #f9fafb;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 20px;
-        }
-        
-        .password-section h4 {
-            margin-bottom: 15px;
-            color: #333;
-        }
-        
-        .alert {
-            padding: 15px 20px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-weight: 500;
-        }
-        
-        .alert-success {
-            background: #d1fae5;
-            color: #065f46;
-            border-left: 4px solid #10b981;
-        }
-        
-        .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            border-left: 4px solid #ef4444;
-        }
-        
-        .activity-list {
-            list-style: none;
-        }
-        
-        .activity-item {
-            padding: 15px;
-            border-left: 3px solid #667eea;
-            margin-bottom: 15px;
-            background: #f9fafb;
-            border-radius: 5px;
-            transition: background 0.3s;
-        }
-        
-        .activity-item:hover {
-            background: #f3f4f6;
-        }
-        
-        .activity-action {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 5px;
-        }
-        
-        .activity-details {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 3px;
-        }
-        
-        .activity-time {
-            font-size: 12px;
-            color: #999;
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 25px;
-            background: #e5e7eb;
-            border-radius: 12px;
-            overflow: hidden;
-            margin-top: 10px;
-            position: relative;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 12px;
-            transition: width 0.5s ease;
-        }
-        
-        .badge {
-            display: inline-block;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            margin: 5px;
-        }
-        
-        .badge-primary { background: #dbeafe; color: #1e40af; }
-        .badge-success { background: #d1fae5; color: #065f46; }
-        .badge-warning { background: #fef3c7; color: #92400e; }
-        .badge-danger { background: #fee2e2; color: #991b1b; }
-        
-        .permissions-box {
-            background: #f9fafb;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-        }
-        
-        .permissions-box h4 {
-            margin-bottom: 10px;
-            color: #333;
-            font-size: 14px;
-        }
-        
-        .permission-tag {
-            display: inline-block;
-            padding: 4px 10px;
-            background: #667eea;
-            color: white;
-            border-radius: 15px;
-            font-size: 11px;
-            margin: 3px;
-        }
-        
-        @media (max-width: 968px) {
-            .profile-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-            
-            .stats-grid {
-                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>My Profile</h1>
-            <a href="dashboard.php" class="btn btn-secondary">← Back to Dashboard</a>
-        </div>
-        
-        <?php if ($success): ?>
-            <div class="alert alert-success">✓ <?php echo $success; ?></div>
-        <?php endif; ?>
-        
-        <?php if ($error): ?>
-            <div class="alert alert-error">✗ <?php echo $error; ?></div>
-        <?php endif; ?>
-        
-        <div class="profile-grid">
-            <div class="profile-card">
-                <div class="profile-header">
-                    <div class="profile-avatar">
-                        <?php echo strtoupper(substr($user['full_name'], 0, 1)); ?>
-                    </div>
-                    <div class="profile-name"><?php echo htmlspecialchars($user['full_name']); ?></div>
-                    <div class="profile-role"><?php echo htmlspecialchars($user['role']); ?></div>
-                </div>
-                
-                <div class="profile-info">
-                    <div class="info-item">
-                        <span class="info-label">Username</span>
-                        <span class="info-value"><?php echo htmlspecialchars($user['username']); ?></span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Email</span>
-                        <span class="info-value"><?php echo htmlspecialchars($user['email']); ?></span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Member Since</span>
-                        <span class="info-value"><?php echo $days_member; ?> days</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Joined</span>
-                        <span class="info-value"><?php echo date('M d, Y', strtotime($user['created_at'])); ?></span>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 25px;">
-                    <div style="font-weight: 600; margin-bottom: 8px; color: #333;">Task Completion Rate</div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: <?php echo $completion_rate; ?>%;">
-                            <?php echo $completion_rate; ?>%
-                        </div>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 25px;">
-                    <div style="font-weight: 600; margin-bottom: 10px; color: #333;">Quick Stats</div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        <span class="badge badge-primary">Projects: <?php echo $project_stats['total_projects']; ?></span>
-                        <span class="badge badge-success">Tasks Created: <?php echo $created_stats['tasks_created']; ?></span>
-                        <span class="badge badge-warning">Remarks: <?php echo $remarks_stats['remarks_count']; ?></span>
-                        <span class="badge badge-primary">Active Projects: <?php echo $active_projects['active_projects']; ?></span>
-                    </div>
-                </div>
-                
-                <?php if (!empty($user_permissions)): ?>
-                <div class="permissions-box">
-                    <h4>Your Permissions</h4>
-                    <div>
-                        <?php foreach ($user_permissions as $permission): ?>
-                            <span class="permission-tag"><?php echo str_replace('_', ' ', ucfirst($permission)); ?></span>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-                <?php endif; ?>
-            </div>
-            
-            <div class="content-section">
-                <h2 class="section-title">Edit Profile Information</h2>
-                
-                <form method="POST">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="username">Username *</label>
-                            <input type="text" id="username" name="username" value="<?php echo htmlspecialchars($user['username']); ?>" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="full_name">Full Name *</label>
-                            <input type="text" id="full_name" name="full_name" value="<?php echo htmlspecialchars($user['full_name']); ?>" required>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="email">Email Address</label>
-                            <input type="email" id="email" value="<?php echo htmlspecialchars($user['email']); ?>" disabled>
-                            <small style="color: #666; display: block; margin-top: 5px;">Email cannot be changed</small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="role">Role</label>
-                            <input type="text" id="role" value="<?php echo htmlspecialchars($user['role']); ?>" disabled>
-                            <small style="color: #666; display: block; margin-top: 5px;">Role is managed by administrators</small>
-                        </div>
-                    </div>
-                    
-                    <div class="password-section">
-                        <h4>Change Password (Optional)</h4>
-                        <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Leave blank if you don't want to change your password</p>
-                        
-                        <div class="form-group">
-                            <label for="current_password">Current Password</label>
-                            <input type="password" id="current_password" name="current_password" placeholder="Enter current password">
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="new_password">New Password</label>
-                                <input type="password" id="new_password" name="new_password" placeholder="Enter new password (min 6 chars)">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="confirm_password">Confirm New Password</label>
-                                <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm new password">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 25px;">
-                        <button type="submit" name="update_profile" class="btn">💾 Update Profile</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-        
-        <div class="stats-grid">
-            <div class="stat-card primary">
-                <div class="stat-icon">📋</div>
-                <div class="stat-value"><?php echo $task_stats['total_tasks']; ?></div>
-                <div class="stat-label">Total Tasks</div>
-            </div>
-            
-            <div class="stat-card warning">
-                <div class="stat-icon">⏳</div>
-                <div class="stat-value"><?php echo $task_stats['pending_tasks']; ?></div>
-                <div class="stat-label">Pending Tasks</div>
-            </div>
-            
-            <div class="stat-card info">
-                <div class="stat-icon">🔄</div>
-                <div class="stat-value"><?php echo $task_stats['in_progress_tasks']; ?></div>
-                <div class="stat-label">In Progress</div>
-            </div>
-            
-            <div class="stat-card success">
-                <div class="stat-icon">✅</div>
-                <div class="stat-value"><?php echo $task_stats['completed_tasks']; ?></div>
-                <div class="stat-label">Completed</div>
-            </div>
-            
-            <div class="stat-card danger">
-                <div class="stat-icon">⚠️</div>
-                <div class="stat-value"><?php echo $overdue_stats['overdue_tasks']; ?></div>
-                <div class="stat-label">Overdue Tasks</div>
-            </div>
-            
-            <div class="stat-card primary">
-                <div class="stat-icon">📅</div>
-                <div class="stat-value"><?php echo $upcoming_stats['upcoming_tasks']; ?></div>
-                <div class="stat-label">Due This Week</div>
-            </div>
-        </div>
-        
-        <div class="content-section">
-            <h2 class="section-title">📊 Recent Activities</h2>
-            <?php if (count($recent_activities) > 0): ?>
-                <ul class="activity-list">
-                    <?php foreach ($recent_activities as $activity): ?>
-                        <li class="activity-item">
-                            <div class="activity-action"><?php echo htmlspecialchars($activity['action']); ?></div>
-                            <div class="activity-details">Task: <?php echo htmlspecialchars($activity['task_title']); ?></div>
-                            <div class="activity-time">⏰ <?php echo date('M d, Y g:i A', strtotime($activity['performed_at'])); ?></div>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php else: ?>
-                <p style="color: #666; text-align: center; padding: 40px 0;">No recent activities found.</p>
-            <?php endif; ?>
+<div class="max-w-5xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800 tracking-tight">My Profile</h1>
+            <p class="text-slate-500 text-sm mt-1">Manage your account settings and view your activity.</p>
         </div>
     </div>
-</body>
-</html>
+    
+    <?php if ($success): ?>
+        <div x-data="{ show: true }" x-show="show" class="bg-green-50 text-green-700 p-4 rounded-xl text-sm font-medium border border-green-100 flex justify-between items-center shadow-sm">
+            <div class="flex items-center gap-3">
+                <i class="fas fa-check-circle text-green-500 text-lg"></i>
+                <?= htmlspecialchars($success) ?>
+            </div>
+            <button @click="show = false" class="text-green-500 hover:text-green-700"><i class="fas fa-times"></i></button>
+        </div>
+    <?php endif; ?>
+    
+    <?php if ($error): ?>
+        <div class="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium border border-red-100 flex items-center gap-3 shadow-sm">
+            <i class="fas fa-exclamation-circle text-red-500 text-lg"></i>
+            <?= htmlspecialchars($error) ?>
+        </div>
+    <?php endif; ?>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left Column: Profile Info & Password -->
+        <div class="lg:col-span-1 space-y-6">
+            
+            <!-- Profile Card -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-brand-500 to-brand-600"></div>
+                <div class="relative flex flex-col items-center mt-8">
+                    <div class="w-24 h-24 rounded-full bg-white p-1 shadow-md mb-4">
+                        <div class="w-full h-full rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-4xl font-bold">
+                            <?= strtoupper(substr($user_info['full_name'], 0, 1)) ?>
+                        </div>
+                    </div>
+                    <h2 class="text-xl font-bold text-slate-800 text-center"><?= htmlspecialchars($user_info['full_name']) ?></h2>
+                    <p class="text-brand-600 font-medium text-sm text-center mb-6"><?= htmlspecialchars($user_info['designation_name'] ?? 'Team Member') ?></p>
+                    
+                    <div class="w-full space-y-4">
+                        <div class="flex flex-col border-b border-slate-100 pb-3">
+                            <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Username</span>
+                            <span class="text-sm text-slate-800 font-medium">@<?= htmlspecialchars($user_info['username']) ?></span>
+                        </div>
+                        <?php if($user_info['email']): ?>
+                        <div class="flex flex-col border-b border-slate-100 pb-3">
+                            <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Email</span>
+                            <span class="text-sm text-slate-800 font-medium"><?= htmlspecialchars($user_info['email']) ?></span>
+                        </div>
+                        <?php endif; ?>
+                        <div class="flex flex-col border-b border-slate-100 pb-3">
+                            <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Role</span>
+                            <span class="text-sm text-slate-800 font-medium capitalize"><?= str_replace('_', ' ', $user_info['role']) ?></span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Division</span>
+                            <span class="text-sm text-slate-800 font-medium"><?= htmlspecialchars($user_info['division_name'] ?? 'N/A') ?></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Change Password Card -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <i class="fas fa-lock text-brand-500"></i> Security
+                </h3>
+                
+                <form method="POST" class="space-y-4">
+                    <input type="hidden" name="action" value="change_password">
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Current Password</label>
+                        <input type="password" name="current_password" required
+                               class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all text-slate-800 text-sm">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">New Password</label>
+                        <input type="password" name="new_password" required minlength="6"
+                               class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all text-slate-800 text-sm">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Confirm New Password</label>
+                        <input type="password" name="confirm_password" required minlength="6"
+                               class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all text-slate-800 text-sm">
+                    </div>
+                    
+                    <button type="submit" class="w-full px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-xl transition-colors shadow-sm focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 mt-2">
+                        Update Password
+                    </button>
+                </form>
+            </div>
+            
+        </div>
+        
+        <!-- Right Column: Recent Activity -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-2xl p-6 md:p-8 border border-slate-200 shadow-sm h-full">
+                <h3 class="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2 border-b border-slate-100 pb-4">
+                    <i class="fas fa-history text-brand-500"></i> Recent Activity
+                </h3>
+                
+                <?php if (empty($activities)): ?>
+                    <div class="text-center py-12">
+                        <div class="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
+                            <i class="fas fa-wind"></i>
+                        </div>
+                        <h4 class="text-slate-700 font-medium mb-1">No recent activity</h4>
+                        <p class="text-slate-500 text-sm">Your recent tasks, projects, and comments will appear here.</p>
+                    </div>
+                <?php else: ?>
+                    <div class="relative border-l-2 border-slate-100 ml-4 space-y-8 pb-4">
+                        <?php foreach($activities as $activity): ?>
+                            <div class="relative pl-6 sm:pl-8 group">
+                                <!-- Timeline Dot -->
+                                <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full <?= $activity['bg'] ?> <?= $activity['color'] ?> flex items-center justify-center border-4 border-white shadow-sm ring-1 ring-slate-100 group-hover:scale-110 transition-transform">
+                                    <i class="fas <?= $activity['icon'] ?> text-xs"></i>
+                                </div>
+                                
+                                <div class="bg-slate-50 rounded-xl p-4 border border-slate-100 hover:border-slate-200 transition-colors shadow-sm">
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-2">
+                                        <h4 class="font-bold text-slate-800 text-sm"><?= $activity['title'] ?></h4>
+                                        <span class="text-xs font-medium text-slate-400 bg-white px-2.5 py-1 rounded-md border border-slate-100 shadow-sm shrink-0">
+                                            <?= date('M j, Y \a\t g:i a', strtotime($activity['date'])) ?>
+                                        </span>
+                                    </div>
+                                    <p class="text-slate-600 text-sm mb-3">
+                                        <?= $activity['description'] ?>
+                                    </p>
+                                    <a href="<?= $activity['link'] ?>" class="inline-flex items-center text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+                                        View Details <i class="fas fa-arrow-right ml-1 text-[10px]"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+<?php require_once 'footer.php'; ?>
