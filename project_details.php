@@ -32,6 +32,13 @@ if (!$is_super && $project['division_id'] != $division_id && $project['created_b
     exit;
 }
 
+$can_edit = false;
+if ($is_super || is_division_head()) {
+    $can_edit = true;
+} elseif ($project['created_by'] == $user_id) {
+    $can_edit = true;
+}
+
 // Handle Form Submissions
 $success = isset($_GET['created']) ? 'Project created successfully!' : '';
 $error = '';
@@ -41,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
             
-            if ($_POST['action'] === 'update_status') {
+            if ($_POST['action'] === 'update_status' && $can_edit) {
                 $status = $_POST['status'];
                 $stmt = $pdo->prepare("UPDATE projects SET status = ? WHERE id = ?");
                 $stmt->execute([$status, $project_id]);
@@ -52,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $success = "Project status updated.";
             } 
-            elseif ($_POST['action'] === 'update_completion') {
+            elseif ($_POST['action'] === 'update_completion' && $can_edit) {
                 $completion = (int)$_POST['completion'];
                 if ($completion < 0) $completion = 0;
                 if ($completion > 100) $completion = 100;
@@ -66,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $success = "Completion rate updated.";
             }
-            elseif ($_POST['action'] === 'update_link') {
+            elseif ($_POST['action'] === 'update_link' && $can_edit) {
                 $link = trim($_POST['project_link']);
                 
                 $stmt = $pdo->prepare("UPDATE projects SET project_link = ? WHERE id = ?");
@@ -173,6 +180,7 @@ function getProjectStatusBadge($status) {
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <!-- Update Status -->
+                    <?php if ($can_edit): ?>
                     <form method="POST" class="space-y-3">
                         <input type="hidden" name="action" value="update_status">
                         <label class="block text-sm font-medium text-slate-700">Project Status</label>
@@ -188,8 +196,17 @@ function getProjectStatusBadge($status) {
                             <button type="submit" class="px-4 py-2.5 bg-brand-50 text-brand-600 hover:bg-brand-100 font-medium rounded-xl transition-colors">Update</button>
                         </div>
                     </form>
+                    <?php else: ?>
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-slate-700">Project Status</label>
+                        <div class="px-4 py-3 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold capitalize">
+                            <?= str_replace('_', ' ', $project['status']) ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     
                     <!-- Update Completion -->
+                    <?php if ($can_edit): ?>
                     <form method="POST" class="space-y-3" x-data="{ comp: <?= (int)$project['completion'] ?> }">
                         <input type="hidden" name="action" value="update_completion">
                         <label class="block text-sm font-medium text-slate-700 flex justify-between">
@@ -200,6 +217,16 @@ function getProjectStatusBadge($status) {
                             <button type="submit" class="px-4 py-2.5 bg-brand-50 text-brand-600 hover:bg-brand-100 font-medium rounded-xl transition-colors whitespace-nowrap">Save</button>
                         </div>
                     </form>
+                    <?php else: ?>
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-slate-700 flex justify-between">
+                            Completion Rate <span class="text-brand-600 font-bold"><?= (int)$project['completion'] ?>%</span>
+                        </label>
+                        <div class="w-full bg-slate-100 rounded-full h-2 mt-3 overflow-hidden">
+                            <div class="<?= $project['completion'] >= 100 ? 'bg-green-500' : 'bg-brand-500' ?> h-2 rounded-full transition-all duration-500" style="width: <?= min(100, $project['completion']) ?>%"></div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -290,6 +317,7 @@ function getProjectStatusBadge($status) {
                     
                     <div>
                         <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Project Link</div>
+                        <?php if ($can_edit): ?>
                         <form method="POST" class="flex gap-2">
                             <input type="hidden" name="action" value="update_link">
                             <div class="relative flex-1">
@@ -298,12 +326,16 @@ function getProjectStatusBadge($status) {
                             </div>
                             <button type="submit" class="px-3 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 text-sm font-medium rounded-lg transition-colors">Save</button>
                         </form>
+                        <?php endif; ?>
+                        
                         <?php if ($project['project_link']): ?>
                         <div class="mt-2 text-sm break-all">
                             <a href="<?= htmlspecialchars($project['project_link']) ?>" target="_blank" class="text-brand-600 hover:text-brand-800 font-medium hover:underline flex items-center gap-1.5">
                                 Open Link <i class="fas fa-external-link-alt text-[10px]"></i>
                             </a>
                         </div>
+                        <?php elseif (!$can_edit): ?>
+                        <div class="text-sm italic text-slate-400 mt-1">No link provided</div>
                         <?php endif; ?>
                     </div>
                     
