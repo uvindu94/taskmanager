@@ -297,13 +297,31 @@ function buildUrl($updates = []) {
                     </a>
                     <?php endif; ?>
                     
-                    <?php for($i = 1; $i <= $total_pages; $i++): ?>
+                    <?php 
+                    $start_page = max(1, $page - 2);
+                    $end_page = min($total_pages, $page + 2);
+
+                    if ($start_page > 1): ?>
+                        <a href="<?= buildUrl(['page' => 1]) ?>" class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0">1</a>
+                        <?php if ($start_page > 2): ?>
+                            <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300">...</span>
+                        <?php endif; ?>
+                    <?php endif; ?>
+
+                    <?php for($i = $start_page; $i <= $end_page; $i++): ?>
                         <?php if ($i == $page): ?>
                             <span aria-current="page" class="relative z-10 inline-flex items-center bg-brand-600 px-4 py-2 text-sm font-semibold text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"><?= $i ?></span>
                         <?php else: ?>
                             <a href="<?= buildUrl(['page' => $i]) ?>" class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0"><?= $i ?></a>
                         <?php endif; ?>
                     <?php endfor; ?>
+
+                    <?php if ($end_page < $total_pages): ?>
+                        <?php if ($end_page < $total_pages - 1): ?>
+                            <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300">...</span>
+                        <?php endif; ?>
+                        <a href="<?= buildUrl(['page' => $total_pages]) ?>" class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0"><?= $total_pages ?></a>
+                    <?php endif; ?>
                     
                     <?php if ($page < $total_pages): ?>
                     <a href="<?= buildUrl(['page' => $page + 1]) ?>" class="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0">
