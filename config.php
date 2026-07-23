@@ -22,6 +22,27 @@ $rolePermissions = [
     'Associate Web Developer' => ['create','update_own', 'view_own'],
     'Intern Web Developer' => ['create','update_own', 'view_own'],
     'UI Developer' => ['create','update_own', 'view_own'],
-    'Business Analyst' => ['create','update_own', 'view_own']
+    'Business Analyst' => ['create','update_own', 'view_own'],
+    // V2 Roles
+    'super_admin' => ['manage_divisions', 'manage_users', 'view_all_tasks', 'create_task', 'assign', 'reassign', 'update_status'],
+    'division_head' => ['manage_division_users', 'view_division_tasks', 'create_task', 'assign_division', 'update_status'],
+    'user' => ['view_own_tasks', 'update_progress', 'forward_task', 'update_status']
 ];
+
+// Helper functions for V2
+function is_super_admin() {
+    return isset($_SESSION['role']) && $_SESSION['role'] === 'super_admin';
+}
+
+function is_division_head() {
+    return isset($_SESSION['role']) && $_SESSION['role'] === 'division_head';
+}
+
+function is_user() {
+    return isset($_SESSION['role']) && $_SESSION['role'] === 'user';
+}
+
+function get_user_division() {
+    return $_SESSION['division_id'] ?? null;
+}
 ?>
