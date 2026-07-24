@@ -105,10 +105,12 @@ if (isset($_SESSION['user_id'])) {
         
         <div class="h-16 flex items-center justify-between px-6 border-b border-slate-100">
             <a href="dashboard.php" class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center font-bold text-lg shadow-md">
+                <!-- <div class="w-8 h-8 rounded bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center font-bold text-lg shadow-md">
                     K
-                </div>
-                <span class="font-bold text-lg tracking-tight text-slate-800">KPI Tracker</span>
+                </div> -->
+                <!-- <span class="font-bold text-lg tracking-tight text-slate-800">KPI Tracker</span> -->
+                                                 <img width="150" src="./assets/tasklogo.png" alt="Task Manager Logo">
+
             </a>
             <button @click="sidebarOpen = false" class="lg:hidden text-slate-400 hover:text-slate-600">
                 <i class="fas fa-times"></i>

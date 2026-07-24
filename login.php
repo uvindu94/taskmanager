@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - KPI Task Tracker</title>
+    <title>Login - Task Manager</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -111,8 +111,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg">
                         <i class="fas fa-chart-line text-brand-600 text-xl"></i>
                     </div>
-                    <span class="font-display font-bold text-2xl tracking-tight">KPI Tracker V2</span>
+                    <span class="font-display font-bold text-2xl tracking-tight">Task Manager (v2)</span>
+                    
                 </div>
+        
                 
                 <div class="space-y-6">
                     <h1 class="font-display text-4xl sm:text-5xl font-bold leading-tight">
@@ -141,6 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <!-- Right Side: Login Form -->
         <div class="w-full md:w-7/12 p-8 sm:p-12 md:p-16 flex flex-col justify-center bg-white" x-data="{ loading: false }">
             <div class="max-w-md w-full mx-auto">
+                                     <img width="200" src="./assets/tasklogo.png" alt="Task Manager Logo">
                 <h2 class="font-display text-3xl font-bold text-slate-900 mb-2">Welcome Back</h2>
                 <p class="text-slate-500 mb-8">Please sign in to your account to continue.</p>
 
@@ -167,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <div class="space-y-2 relative group" x-data="{ showPassword: false }">
                         <div class="flex items-center justify-between">
                             <label class="text-sm font-semibold text-slate-700 transition-colors group-focus-within:text-brand-600">Password</label>
-                            <a href="#" class="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">Forgot password?</a>
+                            <a href="mailto:uvindua@sltds.lk?subject=Password%20Reset%20Request&body=Hi%20IT%20Support%2C%0D%0A%0D%0AI%20would%20like%20to%20request%20a%20password%20reset%20for%20my%20account.%0D%0A%0D%0AMy%20Username%3A%20%5BEnter%20Username%5D%0D%0A%0D%0AThank%20you." class="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">Forgot password?</a>
                         </div>
                         <div class="relative">
                             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -195,7 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 
                 <div class="mt-8 text-center">
                     <p class="text-sm text-slate-500">
-                        Need an account? <a href="#" class="font-semibold text-brand-600 hover:text-brand-700 transition-colors">Contact IT Support</a>
+                        Need an account? <a href="mailto:uvindua@sltds.lk?subject=New%20Account%20Request&body=Hi%20IT%20Support%2C%0D%0A%0D%0AI%20would%20like%20to%20request%20a%20new%20account%20for%20the%20Task%20Manager%20system.%0D%0A%0D%0AFull%20Name%3A%20%5BEnter%20Full%20Name%5D%0D%0ADesignation%3A%20%5BEnter%20Designation%5D%0D%0ADivision%3A%20%5BEnter%20Division%5D%0D%0A%0D%0AThank%20you." class="font-semibold text-brand-600 hover:text-brand-700 transition-colors">Contact IT Support</a>
                     </p>
                 </div>
             </div>
